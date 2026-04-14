@@ -527,6 +527,7 @@ class OfflineAttachmentRepository @Inject constructor(
         val previewFile = fileEncryptionManager.createPreviewCopy(targetName)
         try {
             fileEncryptionManager.decryptFileTo(source, previewFile)
+            previewFile
         } catch (error: Throwable) {
             previewFile.delete()
             throw error
@@ -539,6 +540,7 @@ class OfflineAttachmentRepository @Inject constructor(
         val previewFile = fileEncryptionManager.createPreviewCopy("thumb_${source.nameWithoutExtension}.jpg")
         try {
             fileEncryptionManager.decryptFileTo(source, previewFile)
+            previewFile
         } catch (error: Throwable) {
             previewFile.delete()
             throw error

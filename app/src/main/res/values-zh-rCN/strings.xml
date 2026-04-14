@@ -12,7 +12,8 @@
     <string name="encounter_department_and_doctor_not_set">未填写科室和医生</string>
     <string name="encounter_diagnosis_not_set">未填写诊断</string>
     <string name="new_encounter">新建就诊</string>
-    <string name="edit_encounter">编辑就诊</string>    <string name="action_open_record">查看记录</string>
+    <string name="edit_encounter">编辑就诊</string>
+    <string name="action_open_record">查看记录</string>
     <string name="label_hospital">医院</string>
     <string name="label_hospital_required">医院 *</string>
     <string name="label_department">科室</string>
