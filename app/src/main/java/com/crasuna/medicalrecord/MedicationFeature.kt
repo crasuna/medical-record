@@ -1,15 +1,21 @@
 package com.crasuna.medicalrecord
 
+import android.Manifest
 import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -60,7 +66,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+
+private val medicationReminderTimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 data class MedicationFormState(
     val id: String? = null,
@@ -70,6 +80,8 @@ data class MedicationFormState(
     val startDate: LocalDate = LocalDate.now(),
     val endDate: LocalDate? = null,
     val notes: String = "",
+    val reminderMinutesOfDay: List<Int> = emptyList(),
+    val persistedReminderIds: List<String> = emptyList(),
     val isLoading: Boolean = false,
 ) {
     fun toEntity(): MedicationEntity {
@@ -103,6 +115,7 @@ class MedicationsViewModel @Inject constructor(
 class MedicationEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val medicationRepository: MedicationRepository,
+    private val medicationReminderScheduler: MedicationReminderScheduler,
 ) : ViewModel() {
     private val medicationId: String? = savedStateHandle["medicationId"]
     private val _formState = MutableStateFlow(MedicationFormState(isLoading = medicationId != null))
@@ -113,13 +126,15 @@ class MedicationEditorViewModel @Inject constructor(
             viewModelScope.launch {
                 medicationRepository.getMedication(medicationId)?.let { medication ->
                     _formState.value = MedicationFormState(
-                        id = medication.id,
-                        name = medication.name,
-                        dose = medication.dose.orEmpty(),
-                        frequency = medication.frequency.orEmpty(),
-                        startDate = medication.startDate,
-                        endDate = medication.endDate,
-                        notes = medication.notes.orEmpty(),
+                        id = medication.medication.id,
+                        name = medication.medication.name,
+                        dose = medication.medication.dose.orEmpty(),
+                        frequency = medication.medication.frequency.orEmpty(),
+                        startDate = medication.medication.startDate,
+                        endDate = medication.medication.endDate,
+                        notes = medication.medication.notes.orEmpty(),
+                        reminderMinutesOfDay = medication.reminders.map { it.timeMinutesOfDay }.normalizeReminderTimes(),
+                        persistedReminderIds = medication.reminders.map { it.id },
                         isLoading = false,
                     )
                 } ?: _formState.update { it.copy(isLoading = false) }
@@ -131,10 +146,63 @@ class MedicationEditorViewModel @Inject constructor(
         _formState.update(transform)
     }
 
-    suspend fun save(): String = medicationRepository.saveMedication(formState.value.toEntity())
+    fun addReminderTime(minutesOfDay: Int) {
+        _formState.update { state ->
+            state.copy(reminderMinutesOfDay = (state.reminderMinutesOfDay + minutesOfDay).normalizeReminderTimes())
+        }
+    }
+
+    fun updateReminderTime(index: Int, minutesOfDay: Int) {
+        _formState.update { state ->
+            if (index !in state.reminderMinutesOfDay.indices) {
+                state
+            } else {
+                val updated = state.reminderMinutesOfDay.toMutableList()
+                updated[index] = minutesOfDay
+                state.copy(reminderMinutesOfDay = updated.normalizeReminderTimes())
+            }
+        }
+    }
+
+    fun removeReminderTime(index: Int) {
+        _formState.update { state ->
+            if (index !in state.reminderMinutesOfDay.indices) {
+                state
+            } else {
+                state.copy(
+                    reminderMinutesOfDay = state.reminderMinutesOfDay
+                        .filterIndexed { currentIndex, _ -> currentIndex != index }
+                        .normalizeReminderTimes(),
+                )
+            }
+        }
+    }
+
+    suspend fun save(): String = medicationRepository.saveMedication(
+        medication = formState.value.toEntity(),
+        reminderMinutesOfDay = formState.value.reminderMinutesOfDay.normalizeReminderTimes(),
+    )
 
     suspend fun delete() {
         formState.value.id?.let { medicationRepository.deleteMedication(it) }
+    }
+
+    fun needsNotificationPermissionRequest(): Boolean = medicationReminderScheduler.needsNotificationPermissionRequest()
+
+    fun areNotificationsEnabled(): Boolean = medicationReminderScheduler.areNotificationsEnabled()
+
+    fun canScheduleExactAlarms(): Boolean = medicationReminderScheduler.canScheduleExactAlarms()
+
+    fun notificationSettingsIntent() = medicationReminderScheduler.buildNotificationSettingsIntent()
+
+    fun exactAlarmSettingsIntent() = medicationReminderScheduler.buildExactAlarmSettingsIntent()
+
+    suspend fun syncMedicationReminders(medicationId: String) {
+        medicationReminderScheduler.syncMedication(medicationId)
+    }
+
+    fun cancelReminderAlarms(reminderIds: List<String>) {
+        medicationReminderScheduler.cancelReminderIds(reminderIds)
     }
 }
 
@@ -187,7 +255,11 @@ fun MedicationListRoute(
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    medications.forEach { medication ->
+                    medications.forEach { medicationWithReminders ->
+                        val medication = medicationWithReminders.medication
+                        val reminderSummary = medicationWithReminders.reminders
+                            .sortedBy { it.timeMinutesOfDay }
+                            .joinToString(", ") { it.timeMinutesOfDay.toReminderTimeText() }
                         val doseAndFrequencyFallback = stringResource(R.string.medication_dose_and_frequency_not_set)
                         ElevatedCard(
                             modifier = Modifier
@@ -230,6 +302,13 @@ fun MedicationListRoute(
                                     ),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                                if (reminderSummary.isNotBlank()) {
+                                    Text(
+                                        stringResource(R.string.medication_reminder_summary, reminderSummary),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
                             }
                         }
                     }
@@ -249,6 +328,33 @@ fun MedicationEditorRoute(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var confirmDelete by remember { mutableStateOf(false) }
+    var showNotificationSettingsDialog by remember { mutableStateOf(false) }
+    var showExactAlarmDialog by remember { mutableStateOf(false) }
+    var pendingReminderMedicationId by remember { mutableStateOf<String?>(null) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val savedMedicationId = pendingReminderMedicationId ?: return@rememberLauncherForActivityResult
+        if (!granted) {
+            showNotificationSettingsDialog = true
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch {
+            when {
+                !viewModel.areNotificationsEnabled() -> {
+                    showNotificationSettingsDialog = true
+                }
+                !viewModel.canScheduleExactAlarms() -> {
+                    showExactAlarmDialog = true
+                }
+                else -> {
+                    viewModel.syncMedicationReminders(savedMedicationId)
+                    pendingReminderMedicationId = null
+                    onNavigateBack()
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -339,6 +445,22 @@ fun MedicationEditorRoute(
                         Text(stringResource(R.string.action_clear_end_date))
                     }
                 }
+                MedicationReminderSection(
+                    reminderMinutesOfDay = formState.reminderMinutesOfDay,
+                    onAddReminderTime = {
+                        context.pickMedicationTime(null) { selectedMinutes ->
+                            viewModel.addReminderTime(selectedMinutes)
+                        }
+                    },
+                    onEditReminderTime = { index, currentMinutes ->
+                        context.pickMedicationTime(currentMinutes) { selectedMinutes ->
+                            viewModel.updateReminderTime(index, selectedMinutes)
+                        }
+                    },
+                    onDeleteReminderTime = { index ->
+                        viewModel.removeReminderTime(index)
+                    },
+                )
                 OutlinedTextField(
                     value = formState.notes,
                     onValueChange = { value -> viewModel.update { it.copy(notes = value) } },
@@ -349,8 +471,35 @@ fun MedicationEditorRoute(
                 Button(
                     onClick = {
                         scope.launch {
-                            viewModel.save()
-                            onNavigateBack()
+                            val persistedReminderIds = formState.persistedReminderIds
+                            val hasReminderTimes = formState.reminderMinutesOfDay.isNotEmpty()
+                            val savedMedicationId = viewModel.save()
+                            if (persistedReminderIds.isNotEmpty()) {
+                                viewModel.cancelReminderAlarms(persistedReminderIds)
+                            }
+                            if (!hasReminderTimes) {
+                                pendingReminderMedicationId = null
+                                onNavigateBack()
+                                return@launch
+                            }
+
+                            pendingReminderMedicationId = savedMedicationId
+                            when {
+                                viewModel.needsNotificationPermissionRequest() -> {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                                !viewModel.areNotificationsEnabled() -> {
+                                    showNotificationSettingsDialog = true
+                                }
+                                !viewModel.canScheduleExactAlarms() -> {
+                                    showExactAlarmDialog = true
+                                }
+                                else -> {
+                                    viewModel.syncMedicationReminders(savedMedicationId)
+                                    pendingReminderMedicationId = null
+                                    onNavigateBack()
+                                }
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -371,6 +520,7 @@ fun MedicationEditorRoute(
                 TextButton(
                     onClick = {
                         scope.launch {
+                            viewModel.cancelReminderAlarms(formState.persistedReminderIds)
                             viewModel.delete()
                             confirmDelete = false
                             onNavigateBack()
@@ -384,6 +534,122 @@ fun MedicationEditorRoute(
                 }
             },
         )
+    }
+
+    if (showNotificationSettingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showNotificationSettingsDialog = false },
+            title = { Text(stringResource(R.string.dialog_notification_settings_title)) },
+            text = { Text(stringResource(R.string.dialog_notification_settings_text)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showNotificationSettingsDialog = false
+                        pendingReminderMedicationId = null
+                        context.startActivity(viewModel.notificationSettingsIntent())
+                        onNavigateBack()
+                    },
+                ) {
+                    Text(stringResource(R.string.action_open_settings))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showNotificationSettingsDialog = false
+                        pendingReminderMedicationId = null
+                        onNavigateBack()
+                    },
+                ) {
+                    Text(stringResource(R.string.dialog_action_cancel))
+                }
+            },
+        )
+    }
+
+    if (showExactAlarmDialog) {
+        AlertDialog(
+            onDismissRequest = { showExactAlarmDialog = false },
+            title = { Text(stringResource(R.string.dialog_exact_alarm_title)) },
+            text = { Text(stringResource(R.string.dialog_exact_alarm_text)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showExactAlarmDialog = false
+                        pendingReminderMedicationId = null
+                        context.startActivity(viewModel.exactAlarmSettingsIntent())
+                        onNavigateBack()
+                    },
+                ) {
+                    Text(stringResource(R.string.action_open_settings))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showExactAlarmDialog = false
+                        pendingReminderMedicationId = null
+                        onNavigateBack()
+                    },
+                ) {
+                    Text(stringResource(R.string.dialog_action_cancel))
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun MedicationReminderSection(
+    reminderMinutesOfDay: List<Int>,
+    onAddReminderTime: () -> Unit,
+    onEditReminderTime: (Int, Int) -> Unit,
+    onDeleteReminderTime: (Int) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            stringResource(R.string.section_medication_reminders),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            stringResource(R.string.medication_reminders_helper),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (reminderMinutesOfDay.isEmpty()) {
+            Text(
+                stringResource(R.string.empty_medication_reminders),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            reminderMinutesOfDay.forEachIndexed { index, minutesOfDay ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(
+                        onClick = { onEditReminderTime(index, minutesOfDay) },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(minutesOfDay.toReminderTimeText())
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(onClick = { onDeleteReminderTime(index) }) {
+                        Icon(
+                            Icons.Outlined.Delete,
+                            contentDescription = stringResource(R.string.cd_delete_reminder_time),
+                        )
+                    }
+                }
+            }
+        }
+        OutlinedButton(onClick = onAddReminderTime, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Outlined.Add, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(stringResource(R.string.action_add_reminder_time))
+        }
     }
 }
 
@@ -403,4 +669,28 @@ private fun Context.pickMedicationDate(initialDate: LocalDate, onPicked: (LocalD
         initialDate.monthValue - 1,
         initialDate.dayOfMonth,
     ).show()
+}
+
+private fun Context.pickMedicationTime(initialMinutesOfDay: Int?, onPicked: (Int) -> Unit) {
+    val seedTime = initialMinutesOfDay?.let { minutes ->
+        LocalTime.of(minutes / 60, minutes % 60)
+    } ?: LocalTime.now()
+    TimePickerDialog(
+        this,
+        { _, hourOfDay, minute -> onPicked((hourOfDay * 60) + minute) },
+        seedTime.hour,
+        seedTime.minute,
+        true,
+    ).show()
+}
+
+private fun List<Int>.normalizeReminderTimes(): List<Int> {
+    return map { it.coerceIn(0, (24 * 60) - 1) }
+        .distinct()
+        .sorted()
+}
+
+private fun Int.toReminderTimeText(): String {
+    val safeMinutes = coerceIn(0, (24 * 60) - 1)
+    return LocalTime.of(safeMinutes / 60, safeMinutes % 60).format(medicationReminderTimeFormatter)
 }

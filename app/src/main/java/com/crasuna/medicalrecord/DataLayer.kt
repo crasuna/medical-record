@@ -21,6 +21,8 @@ import androidx.room.Transaction
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.room.withTransaction
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -117,6 +119,26 @@ data class MedicationEntity(
     val updatedAt: Instant = Instant.now(),
 )
 
+@Entity(
+    tableName = "medication_reminders",
+    foreignKeys = [
+        ForeignKey(
+            entity = MedicationEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["medicationId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("medicationId")],
+)
+data class MedicationReminderEntity(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val medicationId: String,
+    val timeMinutesOfDay: Int,
+    val createdAt: Instant = Instant.now(),
+    val updatedAt: Instant = Instant.now(),
+)
+
 data class EncounterWithAttachments(
     @Embedded val encounter: EncounterEntity,
     @Relation(
@@ -124,6 +146,26 @@ data class EncounterWithAttachments(
         entityColumn = "encounterId",
     )
     val attachments: List<EncounterAttachmentEntity>,
+)
+
+data class MedicationWithReminders(
+    @Embedded val medication: MedicationEntity,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "medicationId",
+    )
+    val reminders: List<MedicationReminderEntity>,
+)
+
+data class MedicationReminderSchedule(
+    val reminderId: String,
+    val medicationId: String,
+    val medicationName: String,
+    val dose: String?,
+    val frequency: String?,
+    val startDate: LocalDate,
+    val endDate: LocalDate?,
+    val timeMinutesOfDay: Int,
 )
 
 class MedicalRecordTypeConverters {
@@ -205,11 +247,16 @@ interface AttachmentDao {
 
 @Dao
 interface MedicationDao {
+    @Transaction
     @Query("SELECT * FROM medications ORDER BY startDate DESC, createdAt DESC")
-    fun observeAll(): Flow<List<MedicationEntity>>
+    fun observeAllWithReminders(): Flow<List<MedicationWithReminders>>
 
     @Query("SELECT * FROM medications WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): MedicationEntity?
+
+    @Transaction
+    @Query("SELECT * FROM medications WHERE id = :id LIMIT 1")
+    suspend fun getWithRemindersById(id: String): MedicationWithReminders?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(medication: MedicationEntity)
@@ -218,9 +265,77 @@ interface MedicationDao {
     suspend fun deleteById(id: String)
 }
 
+@Dao
+interface MedicationReminderDao {
+    @Query("SELECT * FROM medication_reminders WHERE medicationId = :medicationId ORDER BY timeMinutesOfDay ASC")
+    suspend fun getForMedication(medicationId: String): List<MedicationReminderEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(reminders: List<MedicationReminderEntity>)
+
+    @Query("DELETE FROM medication_reminders WHERE medicationId = :medicationId")
+    suspend fun deleteByMedicationId(medicationId: String)
+
+    @Query(
+        """
+        SELECT medication_reminders.id AS reminderId,
+               medications.id AS medicationId,
+               medications.name AS medicationName,
+               medications.dose AS dose,
+               medications.frequency AS frequency,
+               medications.startDate AS startDate,
+               medications.endDate AS endDate,
+               medication_reminders.timeMinutesOfDay AS timeMinutesOfDay
+        FROM medication_reminders
+        INNER JOIN medications
+            ON medications.id = medication_reminders.medicationId
+        ORDER BY medications.name ASC, medication_reminders.timeMinutesOfDay ASC
+        """,
+    )
+    suspend fun getAllSchedules(): List<MedicationReminderSchedule>
+
+    @Query(
+        """
+        SELECT medication_reminders.id AS reminderId,
+               medications.id AS medicationId,
+               medications.name AS medicationName,
+               medications.dose AS dose,
+               medications.frequency AS frequency,
+               medications.startDate AS startDate,
+               medications.endDate AS endDate,
+               medication_reminders.timeMinutesOfDay AS timeMinutesOfDay
+        FROM medication_reminders
+        INNER JOIN medications
+            ON medications.id = medication_reminders.medicationId
+        WHERE medication_reminders.medicationId = :medicationId
+        ORDER BY medication_reminders.timeMinutesOfDay ASC
+        """,
+    )
+    suspend fun getSchedulesForMedication(medicationId: String): List<MedicationReminderSchedule>
+
+    @Query(
+        """
+        SELECT medication_reminders.id AS reminderId,
+               medications.id AS medicationId,
+               medications.name AS medicationName,
+               medications.dose AS dose,
+               medications.frequency AS frequency,
+               medications.startDate AS startDate,
+               medications.endDate AS endDate,
+               medication_reminders.timeMinutesOfDay AS timeMinutesOfDay
+        FROM medication_reminders
+        INNER JOIN medications
+            ON medications.id = medication_reminders.medicationId
+        WHERE medication_reminders.id = :reminderId
+        LIMIT 1
+        """,
+    )
+    suspend fun getScheduleByReminderId(reminderId: String): MedicationReminderSchedule?
+}
+
 @Database(
-    entities = [EncounterEntity::class, EncounterAttachmentEntity::class, MedicationEntity::class],
-    version = 1,
+    entities = [EncounterEntity::class, EncounterAttachmentEntity::class, MedicationEntity::class, MedicationReminderEntity::class],
+    version = 2,
     exportSchema = false,
 )
 @TypeConverters(MedicalRecordTypeConverters::class)
@@ -228,6 +343,31 @@ abstract class MedicalRecordDatabase : RoomDatabase() {
     abstract fun encounterDao(): EncounterDao
     abstract fun attachmentDao(): AttachmentDao
     abstract fun medicationDao(): MedicationDao
+    abstract fun medicationReminderDao(): MedicationReminderDao
+}
+
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `medication_reminders` (
+                `id` TEXT NOT NULL,
+                `medicationId` TEXT NOT NULL,
+                `timeMinutesOfDay` INTEGER NOT NULL,
+                `createdAt` INTEGER NOT NULL,
+                `updatedAt` INTEGER NOT NULL,
+                PRIMARY KEY(`id`),
+                FOREIGN KEY(`medicationId`) REFERENCES `medications`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent(),
+        )
+        database.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `index_medication_reminders_medicationId`
+            ON `medication_reminders` (`medicationId`)
+            """.trimIndent(),
+        )
+    }
 }
 
 interface EncounterRepository {
@@ -253,9 +393,9 @@ interface AttachmentRepository {
 }
 
 interface MedicationRepository {
-    fun observeMedications(filter: Flow<MedicationFilter>): Flow<List<MedicationEntity>>
-    suspend fun getMedication(id: String): MedicationEntity?
-    suspend fun saveMedication(medication: MedicationEntity): String
+    fun observeMedications(filter: Flow<MedicationFilter>): Flow<List<MedicationWithReminders>>
+    suspend fun getMedication(id: String): MedicationWithReminders?
+    suspend fun saveMedication(medication: MedicationEntity, reminderMinutesOfDay: List<Int>): String
     suspend fun deleteMedication(id: String)
 }
 
@@ -397,27 +537,46 @@ class OfflineAttachmentRepository @Inject constructor(
 
 @Singleton
 class OfflineMedicationRepository @Inject constructor(
+    private val database: MedicalRecordDatabase,
     private val medicationDao: MedicationDao,
+    private val medicationReminderDao: MedicationReminderDao,
     private val ioDispatcher: CoroutineDispatcher,
 ) : MedicationRepository {
-    override fun observeMedications(filter: Flow<MedicationFilter>): Flow<List<MedicationEntity>> {
-        return medicationDao.observeAll().combine(filter) { medications, selectedFilter ->
+    override fun observeMedications(filter: Flow<MedicationFilter>): Flow<List<MedicationWithReminders>> {
+        return medicationDao.observeAllWithReminders().combine(filter) { medications, selectedFilter ->
             medications.filterBy(selectedFilter)
         }
     }
 
-    override suspend fun getMedication(id: String): MedicationEntity? = withContext(ioDispatcher) {
-        medicationDao.getById(id)
+    override suspend fun getMedication(id: String): MedicationWithReminders? = withContext(ioDispatcher) {
+        medicationDao.getWithRemindersById(id)
     }
 
-    override suspend fun saveMedication(medication: MedicationEntity): String = withContext(ioDispatcher) {
+    override suspend fun saveMedication(medication: MedicationEntity, reminderMinutesOfDay: List<Int>): String = withContext(ioDispatcher) {
         val existing = medicationDao.getById(medication.id)
-        medicationDao.upsert(
-            medication.copy(
-                createdAt = existing?.createdAt ?: medication.createdAt,
-                updatedAt = Instant.now(),
-            ),
-        )
+        val now = Instant.now()
+        val normalizedReminders = reminderMinutesOfDay.distinct().sorted()
+        database.withTransaction {
+            medicationDao.upsert(
+                medication.copy(
+                    createdAt = existing?.createdAt ?: medication.createdAt,
+                    updatedAt = now,
+                ),
+            )
+            medicationReminderDao.deleteByMedicationId(medication.id)
+            if (normalizedReminders.isNotEmpty()) {
+                medicationReminderDao.insertAll(
+                    normalizedReminders.map { minutes ->
+                        MedicationReminderEntity(
+                            medicationId = medication.id,
+                            timeMinutesOfDay = minutes,
+                            createdAt = now,
+                            updatedAt = now,
+                        )
+                    },
+                )
+            }
+        }
         medication.id
     }
 
@@ -426,14 +585,18 @@ class OfflineMedicationRepository @Inject constructor(
     }
 }
 
-fun List<MedicationEntity>.filterBy(
+fun List<MedicationWithReminders>.filterBy(
     filter: MedicationFilter,
     today: LocalDate = LocalDate.now(),
-): List<MedicationEntity> {
+): List<MedicationWithReminders> {
     return when (filter) {
         MedicationFilter.ALL -> this
-        MedicationFilter.CURRENT -> filter { it.endDate == null || !it.endDate.isBefore(today) }
-        MedicationFilter.ENDED -> filter { it.endDate != null && it.endDate.isBefore(today) }
+        MedicationFilter.CURRENT -> filter {
+            it.medication.endDate == null || !it.medication.endDate.isBefore(today)
+        }
+        MedicationFilter.ENDED -> filter {
+            it.medication.endDate != null && it.medication.endDate.isBefore(today)
+        }
     }
 }
 
@@ -463,7 +626,7 @@ object AppModule {
         val factory = SupportFactory(securePassphraseManager.getDatabasePassphrase())
         return Room.databaseBuilder(context, MedicalRecordDatabase::class.java, "medical-record.db")
             .openHelperFactory(factory)
-            .fallbackToDestructiveMigration()
+            .addMigrations(MIGRATION_1_2)
             .build()
     }
 
@@ -475,6 +638,9 @@ object AppModule {
 
     @Provides
     fun provideMedicationDao(database: MedicalRecordDatabase): MedicationDao = database.medicationDao()
+
+    @Provides
+    fun provideMedicationReminderDao(database: MedicalRecordDatabase): MedicationReminderDao = database.medicationReminderDao()
 
     @Provides
     fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO

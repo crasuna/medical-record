@@ -1,5 +1,6 @@
 package com.crasuna.medicalrecord
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.annotation.StringRes
 import androidx.activity.ComponentActivity
@@ -19,7 +20,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -48,16 +52,28 @@ data class TopLevelDestination(
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private var openMedicationId by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        openMedicationId = intent.extractMedicationId()
         enableEdgeToEdge()
         setContent {
             MedicalRecordTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    MedicalRecordAppRoot()
+                    MedicalRecordAppRoot(
+                        openMedicationId = openMedicationId,
+                        onOpenMedicationHandled = { openMedicationId = null },
+                    )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openMedicationId = intent.extractMedicationId()
     }
 }
 
@@ -71,7 +87,10 @@ private fun MedicalRecordTheme(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun MedicalRecordAppRoot() {
+private fun MedicalRecordAppRoot(
+    openMedicationId: String?,
+    onOpenMedicationHandled: () -> Unit,
+) {
     val navController = rememberNavController()
     val destinations = listOf(
         TopLevelDestination(ENCOUNTERS_ROUTE, R.string.nav_encounters, Icons.Outlined.EventNote),
@@ -81,6 +100,20 @@ private fun MedicalRecordAppRoot() {
     val currentDestination = backStackEntry?.destination
     val showBottomBar = destinations.any { top ->
         currentDestination?.hierarchy?.any { it.route == top.route } == true
+    }
+
+    LaunchedEffect(openMedicationId) {
+        if (!openMedicationId.isNullOrBlank()) {
+            navController.navigate(MEDICATIONS_ROUTE) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    saveState = false
+                }
+                launchSingleTop = true
+                restoreState = false
+            }
+            navController.navigate("$MEDICATION_FORM_ROUTE?medicationId=$openMedicationId")
+            onOpenMedicationHandled()
+        }
     }
 
     Scaffold(
@@ -178,4 +211,8 @@ private fun MedicalRecordAppRoot() {
             }
         }
     }
+}
+
+private fun Intent?.extractMedicationId(): String? {
+    return this?.getStringExtra(EXTRA_OPEN_MEDICATION_ID)?.takeIf { it.isNotBlank() }
 }

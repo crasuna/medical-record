@@ -71,9 +71,23 @@
     <string name="start_date_value">开始日期：%1$s</string>
     <string name="end_date_value">结束日期：%1$s</string>
     <string name="action_clear_end_date">清除结束日期</string>
+    <string name="section_medication_reminders">用药提醒</string>
+    <string name="medication_reminders_helper">可为同一种药添加一个或多个每日提醒时间。</string>
+    <string name="empty_medication_reminders">尚未设置提醒时间。</string>
+    <string name="action_add_reminder_time">添加提醒时间</string>
+    <string name="cd_delete_reminder_time">删除提醒时间</string>
+    <string name="medication_reminder_summary">提醒 %1$s</string>
     <string name="action_save_medication">保存用药</string>
     <string name="dialog_delete_medication_title">删除用药？</string>
     <string name="dialog_delete_medication_text">此操作无法撤销。</string>
+    <string name="dialog_notification_settings_title">开启通知权限？</string>
+    <string name="dialog_notification_settings_text">提醒时间已保存，但当前无法发送通知。可前往设置开启用药提醒通知。</string>
+    <string name="dialog_exact_alarm_title">允许精确提醒？</string>
+    <string name="dialog_exact_alarm_text">提醒时间已保存，但当前无法调度精确提醒。可前往设置允许用药提醒按时触发。</string>
+    <string name="action_open_settings">打开设置</string>
+    <string name="medication_reminder_channel_name">用药提醒</string>
+    <string name="medication_reminder_channel_description">用于每日用药提醒通知。</string>
+    <string name="medication_reminder_notification_body_fallback">该按时用药了。</string>
 
     <plurals name="attachments_count">
         <item quantity="one">%1$d 个附件</item>

@@ -71,9 +71,23 @@
     <string name="start_date_value">Start date: %1$s</string>
     <string name="end_date_value">End date: %1$s</string>
     <string name="action_clear_end_date">Clear end date</string>
+    <string name="section_medication_reminders">Medication reminders</string>
+    <string name="medication_reminders_helper">Add one or more daily reminder times.</string>
+    <string name="empty_medication_reminders">No reminder times configured.</string>
+    <string name="action_add_reminder_time">Add reminder time</string>
+    <string name="cd_delete_reminder_time">Delete reminder time</string>
+    <string name="medication_reminder_summary">Reminder %1$s</string>
     <string name="action_save_medication">Save medication</string>
     <string name="dialog_delete_medication_title">Delete medication?</string>
     <string name="dialog_delete_medication_text">This action cannot be undone.</string>
+    <string name="dialog_notification_settings_title">Enable notifications?</string>
+    <string name="dialog_notification_settings_text">Reminder times were saved, but notifications are currently unavailable. Open settings to enable medication reminders.</string>
+    <string name="dialog_exact_alarm_title">Allow exact alarms?</string>
+    <string name="dialog_exact_alarm_text">Reminder times were saved, but exact alarms are unavailable. Open settings to allow precise medication reminders.</string>
+    <string name="action_open_settings">Open settings</string>
+    <string name="medication_reminder_channel_name">Medication reminders</string>
+    <string name="medication_reminder_channel_description">Daily reminders for medications.</string>
+    <string name="medication_reminder_notification_body_fallback">It\'s time to take this medication.</string>
 
     <plurals name="attachments_count">
         <item quantity="one">%1$d attachment</item>
