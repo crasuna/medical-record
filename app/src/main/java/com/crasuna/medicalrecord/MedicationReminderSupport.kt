@@ -64,7 +64,6 @@ class MedicationReminderScheduler @Inject constructor(
     private val zoneId: ZoneId by lazy { ZoneId.systemDefault() }
 
     fun ensureNotificationChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
             MEDICATION_REMINDER_CHANNEL_ID,
             context.getString(R.string.medication_reminder_channel_name),
@@ -86,17 +85,10 @@ class MedicationReminderScheduler @Inject constructor(
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
     }
 
-    fun buildNotificationSettingsIntent(): Intent {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-            }
-        } else {
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.parse("package:${context.packageName}")
-            }
+    fun buildNotificationSettingsIntent(): Intent =
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
         }
-    }
 
     fun buildExactAlarmSettingsIntent(): Intent {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

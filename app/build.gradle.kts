@@ -8,12 +8,12 @@ plugins {
 
 android {
     namespace = "com.crasuna.medicalrecord"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.crasuna.medicalrecord"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 2
         versionName = "1.0.1"
 

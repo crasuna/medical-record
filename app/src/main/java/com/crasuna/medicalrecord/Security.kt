@@ -142,8 +142,12 @@ class FileEncryptionManager @Inject constructor(
 
     fun decryptToBytes(file: File): ByteArray {
         val preview = createPreviewCopy("bytes_${file.name}")
-        decryptFileTo(file, preview)
-        return preview.readBytes().also { preview.delete() }
+        return try {
+            decryptFileTo(file, preview)
+            preview.readBytes()
+        } finally {
+            preview.delete()
+        }
     }
 
     fun createImageThumbnailFromUri(uri: Uri, maxSize: Int = 512): ByteArray? {

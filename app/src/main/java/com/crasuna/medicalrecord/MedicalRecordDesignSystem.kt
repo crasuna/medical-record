@@ -258,9 +258,9 @@ fun MedicalRecordInfoPill(
 @Composable
 fun MedicalRecordSectionCard(
     title: String,
+    modifier: Modifier = Modifier,
     subtitle: String? = null,
     trailing: @Composable (RowScope.() -> Unit)? = null,
-    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     MedicalRecordSurfaceCard(modifier = modifier) {

@@ -12,9 +12,7 @@
     <string name="encounter_department_and_doctor_not_set">Department and doctor not set</string>
     <string name="encounter_diagnosis_not_set">Diagnosis not set</string>
     <string name="new_encounter">New encounter</string>
-    <string name="edit_encounter">Edit encounter</string>
-    <string name="action_back">Back</string>
-    <string name="action_open_record">Open record</string>
+    <string name="edit_encounter">Edit encounter</string>    <string name="action_open_record">Open record</string>
     <string name="label_hospital">Hospital</string>
     <string name="label_hospital_required">Hospital *</string>
     <string name="label_department">Department</string>

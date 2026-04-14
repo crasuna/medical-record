@@ -59,6 +59,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -224,6 +225,11 @@ class AttachmentPreviewViewModel @Inject constructor(
             val preview = attachmentRepository.preparePreview(attachmentId)
             _state.value = AttachmentPreviewState(attachment = attachment, previewFile = preview, isLoading = false)
         }
+    }
+
+    override fun onCleared() {
+        _state.value.previewFile?.delete()
+        super.onCleared()
     }
 }
 
@@ -669,7 +675,12 @@ fun EncounterDetailRoute(
                     } else {
                         attachments.forEach { attachment ->
                             val thumbnail by produceState<File?>(initialValue = null, key1 = attachment.thumbnailPath) {
-                                this.value = viewModel.prepareThumbnail(attachment.thumbnailPath)
+                                value = viewModel.prepareThumbnail(attachment.thumbnailPath)
+                            }
+                            DisposableEffect(thumbnail) {
+                                onDispose {
+                                    thumbnail?.delete()
+                                }
                             }
                             AttachmentListItem(
                                 attachment = attachment,

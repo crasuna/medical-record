@@ -427,9 +427,10 @@ class OfflineEncounterRepository @Inject constructor(
     }
 
     override suspend fun deleteEncounterCascade(id: String) = withContext(ioDispatcher) {
-        val attachments = attachmentDao.getForEncounter(id)
-        database.withTransaction {
+        val attachments = database.withTransaction {
+            val snapshot = attachmentDao.getForEncounter(id)
             encounterDao.deleteById(id)
+            snapshot
         }
         attachments.forEach {
             fileEncryptionManager.deleteIfExists(it.encryptedPath)
@@ -468,41 +469,48 @@ class OfflineAttachmentRepository @Inject constructor(
             ?: context.getString(R.string.attachment_fallback_name, id)
 
         val tempPlain = File(context.cacheDir, "import_$id.$extension")
-        context.contentResolver.openInputStream(sourceUri)?.use { input ->
-            tempPlain.outputStream().use { plainOut -> input.copyTo(plainOut) }
-        } ?: error("Unable to open source attachment.")
+        try {
+            context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                tempPlain.outputStream().use { plainOut -> input.copyTo(plainOut) }
+            } ?: error("Unable to open source attachment.")
 
-        val thumbnailBytes: ByteArray?
-        val pageCount: Int?
-        if (type == AttachmentType.PDF) {
-            val (thumb, pages) = fileEncryptionManager.createPdfThumbnailAndPageCount(tempPlain)
-            thumbnailBytes = thumb
-            pageCount = pages
-        } else {
-            thumbnailBytes = fileEncryptionManager.createImageThumbnailFromUri(sourceUri)
-            pageCount = null
-        }
+            val thumbnailBytes: ByteArray?
+            val pageCount: Int?
+            if (type == AttachmentType.PDF) {
+                val (thumb, pages) = fileEncryptionManager.createPdfThumbnailAndPageCount(tempPlain)
+                thumbnailBytes = thumb
+                pageCount = pages
+            } else {
+                thumbnailBytes = fileEncryptionManager.createImageThumbnailFromUri(sourceUri)
+                pageCount = null
+            }
 
-        tempPlain.inputStream().use { plainInput ->
-            fileEncryptionManager.encryptInputToFile(plainInput, encryptedFile)
-        }
-        if (thumbnailBytes != null) {
-            fileEncryptionManager.storeEncryptedBytes(thumbnailBytes, thumbnailFile)
-        }
-        tempPlain.delete()
+            tempPlain.inputStream().use { plainInput ->
+                fileEncryptionManager.encryptInputToFile(plainInput, encryptedFile)
+            }
+            if (thumbnailBytes != null) {
+                fileEncryptionManager.storeEncryptedBytes(thumbnailBytes, thumbnailFile)
+            }
 
-        attachmentDao.insert(
-            EncounterAttachmentEntity(
-                id = id,
-                encounterId = encounterId,
-                type = type,
-                displayName = displayName,
-                mimeType = mimeType,
-                encryptedPath = encryptedFile.absolutePath,
-                thumbnailPath = thumbnailBytes?.let { thumbnailFile.absolutePath },
-                pageCount = pageCount,
-            ),
-        )
+            attachmentDao.insert(
+                EncounterAttachmentEntity(
+                    id = id,
+                    encounterId = encounterId,
+                    type = type,
+                    displayName = displayName,
+                    mimeType = mimeType,
+                    encryptedPath = encryptedFile.absolutePath,
+                    thumbnailPath = thumbnailBytes?.let { thumbnailFile.absolutePath },
+                    pageCount = pageCount,
+                ),
+            )
+        } catch (error: Throwable) {
+            fileEncryptionManager.deleteIfExists(encryptedFile.absolutePath)
+            fileEncryptionManager.deleteIfExists(thumbnailFile.absolutePath)
+            throw error
+        } finally {
+            tempPlain.delete()
+        }
     }
 
     override suspend fun getAttachment(id: String): EncounterAttachmentEntity? = withContext(ioDispatcher) {
@@ -517,14 +525,24 @@ class OfflineAttachmentRepository @Inject constructor(
             AttachmentType.IMAGE -> "${attachment.id}.${attachment.mimeType.substringAfter('/', "jpg")}"
         }
         val previewFile = fileEncryptionManager.createPreviewCopy(targetName)
-        fileEncryptionManager.decryptFileTo(source, previewFile)
+        try {
+            fileEncryptionManager.decryptFileTo(source, previewFile)
+        } catch (error: Throwable) {
+            previewFile.delete()
+            throw error
+        }
     }
 
     override suspend fun prepareThumbnail(path: String?): File? = withContext(ioDispatcher) {
         if (path.isNullOrBlank()) return@withContext null
         val source = File(path)
         val previewFile = fileEncryptionManager.createPreviewCopy("thumb_${source.nameWithoutExtension}.jpg")
-        fileEncryptionManager.decryptFileTo(source, previewFile)
+        try {
+            fileEncryptionManager.decryptFileTo(source, previewFile)
+        } catch (error: Throwable) {
+            previewFile.delete()
+            throw error
+        }
     }
 
     override suspend fun deleteAttachment(id: String) = withContext(ioDispatcher) {
