@@ -6,7 +6,9 @@ import androidx.annotation.StringRes
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.EventNote
@@ -15,10 +17,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -78,15 +81,6 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun MedicalRecordTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = lightColorScheme(),
-        typography = androidx.compose.material3.Typography(),
-        content = content,
-    )
-}
-
-@Composable
 private fun MedicalRecordAppRoot(
     openMedicationId: String?,
     onOpenMedicationHandled: () -> Unit,
@@ -116,98 +110,125 @@ private fun MedicalRecordAppRoot(
         }
     }
 
-    Scaffold(
-        bottomBar = {
-            if (showBottomBar) {
-                NavigationBar {
-                    destinations.forEach { destination ->
-                        val selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true
-                        val label = stringResource(destination.labelRes)
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = {
-                                navController.navigate(destination.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
+    MedicalRecordBackground {
+        Scaffold(
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            bottomBar = {
+                if (showBottomBar) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                    ) {
+                        Surface(
+                            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
+                            shape = MaterialTheme.shapes.extraLarge,
+                            shadowElevation = 14.dp,
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                        ) {
+                            NavigationBar(
+                                containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                tonalElevation = 0.dp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            ) {
+                                destinations.forEach { destination ->
+                                    val selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true
+                                    val label = stringResource(destination.labelRes)
+                                    NavigationBarItem(
+                                        selected = selected,
+                                        onClick = {
+                                            navController.navigate(destination.route) {
+                                                popUpTo(navController.graph.findStartDestination().id) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        },
+                                        icon = { Icon(destination.icon, contentDescription = label) },
+                                        label = { Text(label) },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                        ),
+                                    )
                                 }
-                            },
-                            icon = { Icon(destination.icon, contentDescription = label) },
-                            label = { Text(label) },
-                        )
+                            }
+                        }
                     }
                 }
-            }
-        },
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = ENCOUNTERS_ROUTE,
-            modifier = Modifier.padding(innerPadding),
-        ) {
-            composable(ENCOUNTERS_ROUTE) {
-                EncounterListRoute(
-                    onCreateEncounter = { navController.navigate(ENCOUNTER_FORM_ROUTE) },
-                    onOpenEncounter = { id -> navController.navigate("$ENCOUNTER_DETAIL_ROUTE/$id") },
-                )
-            }
-            composable(
-                route = "$ENCOUNTER_FORM_ROUTE?encounterId={encounterId}",
-                arguments = listOf(
-                    navArgument("encounterId") {
-                        nullable = true
-                        type = NavType.StringType
-                        defaultValue = null
-                    },
-                ),
+            },
+        ) { innerPadding ->
+            NavHost(
+                navController = navController,
+                startDestination = ENCOUNTERS_ROUTE,
+                modifier = Modifier.padding(innerPadding),
             ) {
-                EncounterEditorRoute(
-                    onNavigateBack = { navController.popBackStack() },
-                    onSaved = { id ->
-                        navController.navigate("$ENCOUNTER_DETAIL_ROUTE/$id") {
-                            popUpTo(ENCOUNTERS_ROUTE)
-                        }
-                    },
-                )
-            }
-            composable(
-                route = "$ENCOUNTER_DETAIL_ROUTE/{encounterId}",
-                arguments = listOf(navArgument("encounterId") { type = NavType.StringType }),
-            ) {
-                EncounterDetailRoute(
-                    onNavigateBack = { navController.popBackStack() },
-                    onEditEncounter = { id -> navController.navigate("$ENCOUNTER_FORM_ROUTE?encounterId=$id") },
-                    onAttachmentPreview = { id -> navController.navigate("$ATTACHMENT_PREVIEW_ROUTE/$id") },
-                    onEncounterDeleted = {
-                        navController.popBackStack(ENCOUNTERS_ROUTE, false)
-                    },
-                )
-            }
-            composable(
-                route = "$ATTACHMENT_PREVIEW_ROUTE/{attachmentId}",
-                arguments = listOf(navArgument("attachmentId") { type = NavType.StringType }),
-            ) {
-                AttachmentPreviewRoute(onNavigateBack = { navController.popBackStack() })
-            }
-            composable(MEDICATIONS_ROUTE) {
-                MedicationListRoute(
-                    onCreateMedication = { navController.navigate(MEDICATION_FORM_ROUTE) },
-                    onEditMedication = { id -> navController.navigate("$MEDICATION_FORM_ROUTE?medicationId=$id") },
-                )
-            }
-            composable(
-                route = "$MEDICATION_FORM_ROUTE?medicationId={medicationId}",
-                arguments = listOf(
-                    navArgument("medicationId") {
-                        nullable = true
-                        type = NavType.StringType
-                        defaultValue = null
-                    },
-                ),
-            ) {
-                MedicationEditorRoute(onNavigateBack = { navController.popBackStack() })
+                composable(ENCOUNTERS_ROUTE) {
+                    EncounterListRoute(
+                        onCreateEncounter = { navController.navigate(ENCOUNTER_FORM_ROUTE) },
+                        onOpenEncounter = { id -> navController.navigate("$ENCOUNTER_DETAIL_ROUTE/$id") },
+                    )
+                }
+                composable(
+                    route = "$ENCOUNTER_FORM_ROUTE?encounterId={encounterId}",
+                    arguments = listOf(
+                        navArgument("encounterId") {
+                            nullable = true
+                            type = NavType.StringType
+                            defaultValue = null
+                        },
+                    ),
+                ) {
+                    EncounterEditorRoute(
+                        onNavigateBack = { navController.popBackStack() },
+                        onSaved = { id ->
+                            navController.navigate("$ENCOUNTER_DETAIL_ROUTE/$id") {
+                                popUpTo(ENCOUNTERS_ROUTE)
+                            }
+                        },
+                    )
+                }
+                composable(
+                    route = "$ENCOUNTER_DETAIL_ROUTE/{encounterId}",
+                    arguments = listOf(navArgument("encounterId") { type = NavType.StringType }),
+                ) {
+                    EncounterDetailRoute(
+                        onNavigateBack = { navController.popBackStack() },
+                        onEditEncounter = { id -> navController.navigate("$ENCOUNTER_FORM_ROUTE?encounterId=$id") },
+                        onAttachmentPreview = { id -> navController.navigate("$ATTACHMENT_PREVIEW_ROUTE/$id") },
+                        onEncounterDeleted = {
+                            navController.popBackStack(ENCOUNTERS_ROUTE, false)
+                        },
+                    )
+                }
+                composable(
+                    route = "$ATTACHMENT_PREVIEW_ROUTE/{attachmentId}",
+                    arguments = listOf(navArgument("attachmentId") { type = NavType.StringType }),
+                ) {
+                    AttachmentPreviewRoute(onNavigateBack = { navController.popBackStack() })
+                }
+                composable(MEDICATIONS_ROUTE) {
+                    MedicationListRoute(
+                        onCreateMedication = { navController.navigate(MEDICATION_FORM_ROUTE) },
+                        onEditMedication = { id -> navController.navigate("$MEDICATION_FORM_ROUTE?medicationId=$id") },
+                    )
+                }
+                composable(
+                    route = "$MEDICATION_FORM_ROUTE?medicationId={medicationId}",
+                    arguments = listOf(
+                        navArgument("medicationId") {
+                            nullable = true
+                            type = NavType.StringType
+                            defaultValue = null
+                        },
+                    ),
+                ) {
+                    MedicationEditorRoute(onNavigateBack = { navController.popBackStack() })
+                }
             }
         }
     }

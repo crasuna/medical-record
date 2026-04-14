@@ -8,11 +8,13 @@
     <string name="cd_add_encounter">Add encounter</string>
     <string name="empty_no_encounters_title">No encounters yet</string>
     <string name="empty_no_encounters_subtitle">Create an encounter first. Attachments are managed inside encounter details.</string>
+    <string name="encounters_hero_subtitle">Keep visits, diagnoses, and attachments in one calm clinical timeline.</string>
     <string name="encounter_department_and_doctor_not_set">Department and doctor not set</string>
     <string name="encounter_diagnosis_not_set">Diagnosis not set</string>
     <string name="new_encounter">New encounter</string>
     <string name="edit_encounter">Edit encounter</string>
     <string name="action_back">Back</string>
+    <string name="action_open_record">Open record</string>
     <string name="label_hospital">Hospital</string>
     <string name="label_hospital_required">Hospital *</string>
     <string name="label_department">Department</string>
@@ -23,6 +25,7 @@
     <string name="label_notes">Notes</string>
     <string name="action_save_encounter">Save encounter</string>
     <string name="encounter_attachments_after_saving">Attachments are added after saving.</string>
+    <string name="encounter_form_hero_subtitle">Capture the visit basics first, then complete the clinical notes.</string>
     <string name="camera_attachment_name">Camera_%1$d.jpg</string>
     <string name="screen_encounter_detail_title">Encounter detail</string>
     <string name="action_edit">Edit</string>
@@ -49,12 +52,20 @@
     <string name="pdf_page_indicator">Page %1$d / %2$d</string>
     <string name="cd_pdf_preview">PDF preview</string>
     <string name="section_visit_date_time">Visit date and time</string>
+    <string name="section_visit_basics">Visit basics</string>
+    <string name="section_visit_basics_subtitle">Record where and when the visit happened.</string>
+    <string name="section_visit_basics_detail_subtitle">Core visit metadata and care context.</string>
+    <string name="section_clinical_notes">Clinical notes</string>
+    <string name="section_clinical_notes_subtitle">Summarize symptoms, diagnosis, and plan in one place.</string>
+    <string name="section_clinical_notes_detail_subtitle">Review the key medical notes from this visit.</string>
+    <string name="section_attachments_subtitle">Store photos, scans, and PDFs under the same encounter.</string>
     <string name="action_select_time">Select time</string>
     <string name="action_clear_time">Clear time</string>
     <string name="attachment_fallback_name">Attachment %1$s</string>
 
     <string name="screen_medications_title">Medications</string>
     <string name="cd_add_medication">Add medication</string>
+    <string name="medications_hero_subtitle">Monitor active courses, date ranges, and reminders with less clutter.</string>
     <string name="filter_current">Current</string>
     <string name="filter_all">All</string>
     <string name="filter_ended">Ended</string>
@@ -65,9 +76,15 @@
     <string name="medication_date_range">%1$s - %2$s</string>
     <string name="new_medication">New medication</string>
     <string name="edit_medication">Edit medication</string>
+    <string name="medication_form_hero_subtitle">Set the course details first, then fine tune reminders and notes.</string>
     <string name="label_medication_name_required">Medication name *</string>
     <string name="label_dose">Dose</string>
     <string name="label_frequency">Frequency</string>
+    <string name="section_medication_basics">Medication basics</string>
+    <string name="section_medication_basics_subtitle">Name, dose, and frequency for the current course.</string>
+    <string name="section_medication_schedule">Medication schedule</string>
+    <string name="section_medication_schedule_subtitle">Define the treatment window before adding reminders.</string>
+    <string name="section_notes_subtitle">Add anything worth remembering for this medication plan.</string>
     <string name="start_date_value">Start date: %1$s</string>
     <string name="end_date_value">End date: %1$s</string>
     <string name="action_clear_end_date">Clear end date</string>
@@ -96,5 +113,9 @@
     <plurals name="attachment_pdf_pages">
         <item quantity="one">PDF %1$d page</item>
         <item quantity="other">PDF %1$d pages</item>
+    </plurals>
+    <plurals name="medications_active_count">
+        <item quantity="one">%1$d active</item>
+        <item quantity="other">%1$d active</item>
     </plurals>
 </resources>

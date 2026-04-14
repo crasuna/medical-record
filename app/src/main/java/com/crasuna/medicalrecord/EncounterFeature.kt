@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.LocalHospital
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -54,11 +55,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -74,6 +77,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -231,9 +235,11 @@ fun EncounterListRoute(
     viewModel: EncountersViewModel = hiltViewModel(),
 ) {
     val encounters by viewModel.encounters.collectAsState()
-    Scaffold(
+    val totalAttachments = encounters.sumOf { it.attachmentCount }
+
+    MedicalRecordScreenScaffold(
         topBar = {
-            CenterAlignedTopAppBar(title = { Text(stringResource(R.string.screen_encounters_title)) })
+            MedicalRecordTopAppBar(title = stringResource(R.string.screen_encounters_title))
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onCreateEncounter) {
@@ -241,66 +247,132 @@ fun EncounterListRoute(
             }
         },
     ) { innerPadding ->
-        if (encounters.isEmpty()) {
-            EmptyState(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                title = stringResource(R.string.empty_no_encounters_title),
-                subtitle = stringResource(R.string.empty_no_encounters_subtitle),
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            MedicalRecordHeroCard(
+                title = stringResource(R.string.screen_encounters_title),
+                subtitle = stringResource(R.string.encounters_hero_subtitle),
+                icon = Icons.Outlined.LocalHospital,
+                trailing = {
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        MedicalRecordInfoPill(text = encounters.size.toString(), accent = true)
+                        MedicalRecordInfoPill(
+                            text = pluralStringResource(
+                                R.plurals.attachments_count,
+                                totalAttachments,
+                                totalAttachments,
+                            ),
+                            icon = Icons.Outlined.AttachFile,
+                        )
+                    }
+                },
             )
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+
+            if (encounters.isEmpty()) {
+                MedicalRecordEmptyState(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    title = stringResource(R.string.empty_no_encounters_title),
+                    subtitle = stringResource(R.string.empty_no_encounters_subtitle),
+                    icon = Icons.Outlined.LocalHospital,
+                )
+            } else {
                 encounters.forEach { encounter ->
-                    val departmentAndDoctorFallback = stringResource(R.string.encounter_department_and_doctor_not_set)
-                    ElevatedCard(
+                    val visitSummary = encounter.visitDate.format(dateFormatter) +
+                        (encounter.visitTime?.let { " ${it.format(timeFormatter)}" } ?: "")
+                    val departmentAndDoctor = listOfNotNull(encounter.department, encounter.doctor)
+                        .joinToString(" / ")
+                        .ifBlank { stringResource(R.string.encounter_department_and_doctor_not_set) }
+                    val diagnosis = encounter.diagnosis ?: stringResource(R.string.encounter_diagnosis_not_set)
+
+                    MedicalRecordSurfaceCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onOpenEncounter(encounter.id) },
                     ) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Top,
+                        ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.Top,
                             ) {
-                                Text(encounter.hospital, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                Text(
-                                    encounter.visitDate.format(dateFormatter) +
-                                        (encounter.visitTime?.let { " ${it.format(timeFormatter)}" } ?: ""),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    shape = RoundedCornerShape(20.dp),
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .padding(12.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(Icons.Outlined.LocalHospital, contentDescription = null)
+                                    }
+                                }
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(
+                                            encounter.hospital,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                        Text(
+                                            departmentAndDoctor,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    Text(
+                                        diagnosis,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
-                            Text(
-                                listOfNotNull(encounter.department, encounter.doctor)
-                                    .joinToString(" / ")
-                                    .ifBlank { departmentAndDoctorFallback },
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            MedicalRecordInfoPill(
+                                text = visitSummary,
+                                icon = Icons.Outlined.Schedule,
+                                accent = true,
                             )
-                            Text(
-                                encounter.diagnosis ?: stringResource(R.string.encounter_diagnosis_not_set),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            MedicalRecordInfoPill(
+                                text = pluralStringResource(
+                                    R.plurals.attachments_count,
+                                    encounter.attachmentCount,
+                                    encounter.attachmentCount,
+                                ),
+                                icon = Icons.Outlined.AttachFile,
                             )
                             AssistChip(
                                 onClick = { onOpenEncounter(encounter.id) },
-                                label = {
-                                    Text(
-                                        pluralStringResource(
-                                            R.plurals.attachments_count,
-                                            encounter.attachmentCount,
-                                            encounter.attachmentCount,
-                                        ),
-                                    )
-                                },
-                                leadingIcon = { Icon(Icons.Outlined.AttachFile, contentDescription = null) },
+                                label = { Text(stringResource(R.string.action_open_record)) },
+                                leadingIcon = { Icon(Icons.Outlined.Description, contentDescription = null) },
                             )
                         }
                     }
@@ -321,21 +393,13 @@ fun EncounterEditorRoute(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    Scaffold(
+    MedicalRecordScreenScaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        stringResource(
-                            if (formState.id == null) R.string.new_encounter else R.string.edit_encounter,
-                        ),
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                    }
-                },
+            MedicalRecordTopAppBar(
+                title = stringResource(
+                    if (formState.id == null) R.string.new_encounter else R.string.edit_encounter,
+                ),
+                onNavigateBack = onNavigateBack,
             )
         },
     ) { innerPadding ->
@@ -349,82 +413,92 @@ fun EncounterEditorRoute(
                     .fillMaxSize()
                     .padding(innerPadding)
                     .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                DateAndTimeSection(
-                    visitDate = formState.visitDate,
-                    visitTime = formState.visitTime,
-                    onDateClick = {
-                        context.pickEncounterDate(formState.visitDate) { selected ->
-                            viewModel.update { it.copy(visitDate = selected) }
-                        }
-                    },
-                    onTimeClick = {
-                        context.pickEncounterTime(formState.visitTime) { selected ->
-                            viewModel.update { it.copy(visitTime = selected) }
-                        }
-                    },
-                    onClearTime = { viewModel.update { it.copy(visitTime = null) } },
+                MedicalRecordHeroCard(
+                    title = stringResource(
+                        if (formState.id == null) R.string.new_encounter else R.string.edit_encounter,
+                    ),
+                    subtitle = stringResource(R.string.encounter_form_hero_subtitle),
+                    icon = Icons.Outlined.LocalHospital,
                 )
-                OutlinedTextField(
-                    value = formState.hospital,
-                    onValueChange = { value -> viewModel.update { it.copy(hospital = value) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.label_hospital_required)) },
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = formState.department,
-                    onValueChange = { value -> viewModel.update { it.copy(department = value) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.label_department)) },
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = formState.doctor,
-                    onValueChange = { value -> viewModel.update { it.copy(doctor = value) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.label_doctor)) },
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = formState.chiefComplaint,
-                    onValueChange = { value -> viewModel.update { it.copy(chiefComplaint = value) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.label_chief_complaint)) },
-                    minLines = 2,
-                )
-                OutlinedTextField(
-                    value = formState.diagnosis,
-                    onValueChange = { value -> viewModel.update { it.copy(diagnosis = value) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.label_diagnosis)) },
-                    minLines = 2,
-                )
-                OutlinedTextField(
-                    value = formState.disposition,
-                    onValueChange = { value -> viewModel.update { it.copy(disposition = value) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.label_disposition)) },
-                    minLines = 2,
-                )
-                OutlinedTextField(
-                    value = formState.notes,
-                    onValueChange = { value -> viewModel.update { it.copy(notes = value) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.label_notes)) },
-                    minLines = 3,
-                )
-                Button(
+                MedicalRecordSectionCard(
+                    title = stringResource(R.string.section_visit_basics),
+                    subtitle = stringResource(R.string.section_visit_basics_subtitle),
+                ) {
+                    DateAndTimeSection(
+                        visitDate = formState.visitDate,
+                        visitTime = formState.visitTime,
+                        onDateClick = {
+                            context.pickEncounterDate(formState.visitDate) { selected ->
+                                viewModel.update { it.copy(visitDate = selected) }
+                            }
+                        },
+                        onTimeClick = {
+                            context.pickEncounterTime(formState.visitTime) { selected ->
+                                viewModel.update { it.copy(visitTime = selected) }
+                            }
+                        },
+                        onClearTime = { viewModel.update { it.copy(visitTime = null) } },
+                    )
+                    MedicalRecordTextField(
+                        value = formState.hospital,
+                        onValueChange = { value: String -> viewModel.update { it.copy(hospital = value) } },
+                        label = stringResource(R.string.label_hospital_required),
+                        singleLine = true,
+                    )
+                    MedicalRecordTextField(
+                        value = formState.department,
+                        onValueChange = { value: String -> viewModel.update { it.copy(department = value) } },
+                        label = stringResource(R.string.label_department),
+                        singleLine = true,
+                    )
+                    MedicalRecordTextField(
+                        value = formState.doctor,
+                        onValueChange = { value: String -> viewModel.update { it.copy(doctor = value) } },
+                        label = stringResource(R.string.label_doctor),
+                        singleLine = true,
+                    )
+                }
+                MedicalRecordSectionCard(
+                    title = stringResource(R.string.section_clinical_notes),
+                    subtitle = stringResource(R.string.section_clinical_notes_subtitle),
+                ) {
+                    MedicalRecordTextField(
+                        value = formState.chiefComplaint,
+                        onValueChange = { value: String -> viewModel.update { it.copy(chiefComplaint = value) } },
+                        label = stringResource(R.string.label_chief_complaint),
+                        minLines = 2,
+                    )
+                    MedicalRecordTextField(
+                        value = formState.diagnosis,
+                        onValueChange = { value: String -> viewModel.update { it.copy(diagnosis = value) } },
+                        label = stringResource(R.string.label_diagnosis),
+                        minLines = 2,
+                    )
+                    MedicalRecordTextField(
+                        value = formState.disposition,
+                        onValueChange = { value: String -> viewModel.update { it.copy(disposition = value) } },
+                        label = stringResource(R.string.label_disposition),
+                        minLines = 2,
+                    )
+                    MedicalRecordTextField(
+                        value = formState.notes,
+                        onValueChange = { value: String -> viewModel.update { it.copy(notes = value) } },
+                        label = stringResource(R.string.label_notes),
+                        minLines = 3,
+                    )
+                }
+                MedicalRecordPrimaryButton(
+                    text = stringResource(R.string.action_save_encounter),
                     onClick = { scope.launch { onSaved(viewModel.save()) } },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = formState.hospital.isNotBlank(),
-                ) {
-                    Text(stringResource(R.string.action_save_encounter))
-                }
+                )
                 Text(
                     stringResource(R.string.encounter_attachments_after_saving),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -468,15 +542,11 @@ fun EncounterDetailRoute(
         if (uri != null) scope.launch { viewModel.importAttachment(uri, forcedMimeType = "application/pdf") }
     }
 
-    Scaffold(
+    MedicalRecordScreenScaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text(detail?.encounter?.hospital ?: stringResource(R.string.screen_encounter_detail_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                    }
-                },
+            MedicalRecordTopAppBar(
+                title = detail?.encounter?.hospital ?: stringResource(R.string.screen_encounter_detail_title),
+                onNavigateBack = onNavigateBack,
                 actions = {
                     detail?.encounter?.id?.let { encounterId ->
                         IconButton(onClick = { onEditEncounter(encounterId) }) {
@@ -502,88 +572,111 @@ fun EncounterDetailRoute(
                     .fillMaxSize()
                     .padding(innerPadding)
                     .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        LabeledValue(
-                            stringResource(R.string.label_visit_time),
-                            encounter.visitDate.format(dateFormatter) +
-                                (encounter.visitTime?.let { " ${it.format(timeFormatter)}" } ?: ""),
+                MedicalRecordHeroCard(
+                    title = encounter.hospital,
+                    subtitle = encounter.visitDate.format(dateFormatter) +
+                        (encounter.visitTime?.let { " ${it.format(timeFormatter)}" } ?: ""),
+                    icon = Icons.Outlined.LocalHospital,
+                    trailing = {
+                        MedicalRecordInfoPill(
+                            text = pluralStringResource(
+                                R.plurals.attachments_count,
+                                attachments.size,
+                                attachments.size,
+                            ),
+                            icon = Icons.Outlined.AttachFile,
+                            accent = true,
                         )
-                        LabeledValue(stringResource(R.string.label_hospital), encounter.hospital)
-                        LabeledValue(
-                            stringResource(R.string.label_department),
-                            encounter.department ?: stringResource(R.string.value_not_set),
-                        )
-                        LabeledValue(
-                            stringResource(R.string.label_doctor),
-                            encounter.doctor ?: stringResource(R.string.value_not_set),
-                        )
-                        LabeledValue(
-                            stringResource(R.string.label_chief_complaint),
-                            encounter.chiefComplaint ?: stringResource(R.string.value_not_set),
-                        )
-                        LabeledValue(
-                            stringResource(R.string.label_diagnosis),
-                            encounter.diagnosis ?: stringResource(R.string.value_not_set),
-                        )
-                        LabeledValue(
-                            stringResource(R.string.label_disposition),
-                            encounter.disposition ?: stringResource(R.string.value_not_set),
-                        )
-                        LabeledValue(
-                            stringResource(R.string.label_notes),
-                            encounter.notes ?: stringResource(R.string.value_not_set),
-                        )
-                    }
+                    },
+                )
+                MedicalRecordSectionCard(
+                    title = stringResource(R.string.section_visit_basics),
+                    subtitle = stringResource(R.string.section_visit_basics_detail_subtitle),
+                ) {
+                    LabeledValue(
+                        stringResource(R.string.label_visit_time),
+                        encounter.visitDate.format(dateFormatter) +
+                            (encounter.visitTime?.let { " ${it.format(timeFormatter)}" } ?: ""),
+                    )
+                    LabeledValue(stringResource(R.string.label_hospital), encounter.hospital)
+                    LabeledValue(
+                        stringResource(R.string.label_department),
+                        encounter.department ?: stringResource(R.string.value_not_set),
+                    )
+                    LabeledValue(
+                        stringResource(R.string.label_doctor),
+                        encounter.doctor ?: stringResource(R.string.value_not_set),
+                    )
+                }
+                MedicalRecordSectionCard(
+                    title = stringResource(R.string.section_clinical_notes),
+                    subtitle = stringResource(R.string.section_clinical_notes_detail_subtitle),
+                ) {
+                    LabeledValue(
+                        stringResource(R.string.label_chief_complaint),
+                        encounter.chiefComplaint ?: stringResource(R.string.value_not_set),
+                    )
+                    LabeledValue(
+                        stringResource(R.string.label_diagnosis),
+                        encounter.diagnosis ?: stringResource(R.string.value_not_set),
+                    )
+                    LabeledValue(
+                        stringResource(R.string.label_disposition),
+                        encounter.disposition ?: stringResource(R.string.value_not_set),
+                    )
+                    LabeledValue(
+                        stringResource(R.string.label_notes),
+                        encounter.notes ?: stringResource(R.string.value_not_set),
+                    )
                 }
 
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(
-                            stringResource(R.string.section_attachments),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(
-                                onClick = {
-                                    val uri = createCameraOutputUri(context)
-                                    pendingCameraUri = uri
-                                    cameraLauncher.launch(uri)
-                                },
-                            ) {
-                                Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text(stringResource(R.string.action_capture))
-                            }
-                            OutlinedButton(onClick = { imageImporter.launch("image/*") }) {
-                                Icon(Icons.Outlined.Image, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text(stringResource(R.string.action_import_image))
-                            }
-                            OutlinedButton(onClick = { pdfImporter.launch("application/pdf") }) {
-                                Icon(Icons.Outlined.Description, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text(stringResource(R.string.action_import_pdf))
-                            }
+                MedicalRecordSectionCard(
+                    title = stringResource(R.string.section_attachments),
+                    subtitle = stringResource(R.string.section_attachments_subtitle),
+                ) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                val uri = createCameraOutputUri(context)
+                                pendingCameraUri = uri
+                                cameraLauncher.launch(uri)
+                            },
+                        ) {
+                            Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.action_capture))
                         }
-                        if (attachments.isEmpty()) {
-                            Text(stringResource(R.string.empty_no_attachments), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else {
-                            attachments.forEach { attachment ->
-                                val thumbnail by produceState<File?>(initialValue = null, key1 = attachment.thumbnailPath) {
-                                    value = viewModel.prepareThumbnail(attachment.thumbnailPath)
-                                }
-                                AttachmentListItem(
-                                    attachment = attachment,
-                                    thumbnailFile = thumbnail,
-                                    onOpen = { onAttachmentPreview(attachment.id) },
-                                    onDelete = { deletingAttachmentId = attachment.id },
-                                )
+                        OutlinedButton(onClick = { imageImporter.launch("image/*") }) {
+                            Icon(Icons.Outlined.Image, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.action_import_image))
+                        }
+                        OutlinedButton(onClick = { pdfImporter.launch("application/pdf") }) {
+                            Icon(Icons.Outlined.Description, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.action_import_pdf))
+                        }
+                    }
+                    if (attachments.isEmpty()) {
+                        Text(
+                            stringResource(R.string.empty_no_attachments),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        attachments.forEach { attachment ->
+                            val thumbnail by produceState<File?>(initialValue = null, key1 = attachment.thumbnailPath) {
+                                this.value = viewModel.prepareThumbnail(attachment.thumbnailPath)
                             }
+                            AttachmentListItem(
+                                attachment = attachment,
+                                thumbnailFile = thumbnail,
+                                onOpen = { onAttachmentPreview(attachment.id) },
+                                onDelete = { deletingAttachmentId = attachment.id },
+                            )
                         }
                     }
                 }
@@ -649,17 +742,13 @@ fun AttachmentPreviewRoute(
     viewModel: AttachmentPreviewViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
-    var currentPage by remember { mutableStateOf(0) }
+    var currentPage by remember { mutableIntStateOf(0) }
 
-    Scaffold(
+    MedicalRecordScreenScaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text(state.attachment?.displayName ?: stringResource(R.string.screen_attachment_preview_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                    }
-                },
+            MedicalRecordTopAppBar(
+                title = state.attachment?.displayName ?: stringResource(R.string.screen_attachment_preview_title),
+                onNavigateBack = onNavigateBack,
             )
         },
     ) { innerPadding ->
@@ -702,12 +791,16 @@ private fun AttachmentListItem(
     onOpen: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f),
+        shape = RoundedCornerShape(22.dp),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onOpen() }
-                .padding(12.dp),
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (thumbnailFile != null) {
@@ -734,8 +827,13 @@ private fun AttachmentListItem(
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(attachment.displayName, fontWeight = FontWeight.Medium)
                 Text(
+                    attachment.displayName,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                MedicalRecordInfoPill(
                     text = if (attachment.type == AttachmentType.PDF) {
                         pluralStringResource(
                             R.plurals.attachment_pdf_pages,
@@ -745,8 +843,11 @@ private fun AttachmentListItem(
                     } else {
                         stringResource(R.string.attachment_image_type)
                     },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    icon = if (attachment.type == AttachmentType.PDF) {
+                        Icons.Outlined.Description
+                    } else {
+                        Icons.Outlined.Image
+                    },
                 )
             }
             IconButton(onClick = onDelete) {
@@ -827,8 +928,12 @@ private fun DateAndTimeSection(
     onTimeClick: () -> Unit,
     onClearTime: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(R.string.section_visit_date_time), style = MaterialTheme.typography.titleSmall)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            stringResource(R.string.section_visit_date_time),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onDateClick, modifier = Modifier.weight(1f)) {
                 Text(visitDate.format(dateFormatter))
@@ -845,10 +950,9 @@ private fun DateAndTimeSection(
 
 @Composable
 private fun LabeledValue(label: String, value: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        Text(value, style = MaterialTheme.typography.bodyMedium)
-        Divider()
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
@@ -858,22 +962,12 @@ private fun EmptyState(
     title: String,
     subtitle: String,
 ) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(
-            modifier = Modifier.padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(
-                Icons.Outlined.LocalHospital,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-        }
-    }
+    MedicalRecordEmptyState(
+        modifier = modifier,
+        title = title,
+        subtitle = subtitle,
+        icon = Icons.Outlined.LocalHospital,
+    )
 }
 
 private fun createCameraOutputUri(context: Context): Uri {

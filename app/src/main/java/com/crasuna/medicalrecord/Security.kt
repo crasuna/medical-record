@@ -147,10 +147,35 @@ class FileEncryptionManager @Inject constructor(
     }
 
     fun createImageThumbnailFromUri(uri: Uri, maxSize: Int = 512): ByteArray? {
-        val data = context.contentResolver.openInputStream(uri)?.use { stream ->
-            stream.readBytes()
+        val bounds = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            BitmapFactory.decodeStream(stream, null, bounds)
         } ?: return null
-        val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size) ?: return null
+
+        val largestDimension = maxOf(bounds.outWidth, bounds.outHeight)
+        val sampleSize = when {
+            largestDimension <= 0 -> 1
+            largestDimension <= maxSize -> 1
+            else -> {
+                var candidate = 1
+                while ((largestDimension / candidate) > maxSize) {
+                    candidate *= 2
+                }
+                candidate
+            }
+        }
+
+        val bitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
+            BitmapFactory.decodeStream(
+                stream,
+                null,
+                BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                },
+            )
+        } ?: return null
         return createScaledJpeg(bitmap, maxSize)
     }
 

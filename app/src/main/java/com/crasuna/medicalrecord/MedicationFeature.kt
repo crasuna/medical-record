@@ -17,12 +17,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Medication
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -38,6 +40,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,8 +53,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.SavedStateHandle
@@ -215,10 +220,13 @@ fun MedicationListRoute(
 ) {
     val medications by viewModel.medications.collectAsState()
     val filter by viewModel.filter.collectAsState()
+    val activeCount = medications.count { medication ->
+        medication.medication.endDate == null || !medication.medication.endDate.isBefore(LocalDate.now())
+    }
 
-    Scaffold(
+    MedicalRecordScreenScaffold(
         topBar = {
-            CenterAlignedTopAppBar(title = { Text(stringResource(R.string.screen_medications_title)) })
+            MedicalRecordTopAppBar(title = stringResource(R.string.screen_medications_title))
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onCreateMedication) {
@@ -230,9 +238,31 @@ fun MedicationListRoute(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            MedicalRecordHeroCard(
+                title = stringResource(R.string.screen_medications_title),
+                subtitle = stringResource(R.string.medications_hero_subtitle),
+                icon = Icons.Outlined.Medication,
+                trailing = {
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        MedicalRecordInfoPill(text = medications.size.toString(), accent = true)
+                        MedicalRecordInfoPill(
+                            text = pluralStringResource(
+                                R.plurals.medications_active_count,
+                                activeCount,
+                                activeCount,
+                            ),
+                            icon = Icons.Outlined.Schedule,
+                        )
+                    }
+                },
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MedicationFilter.values().forEach { candidate ->
                     FilterChip(
@@ -243,16 +273,14 @@ fun MedicationListRoute(
                 }
             }
             if (medications.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Outlined.Medication, contentDescription = null)
-                        Text(stringResource(R.string.empty_no_medications_title))
-                        Text(
-                            stringResource(R.string.empty_no_medications_subtitle),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                MedicalRecordEmptyState(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    title = stringResource(R.string.empty_no_medications_title),
+                    subtitle = stringResource(R.string.empty_no_medications_subtitle),
+                    icon = Icons.Outlined.Medication,
+                )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     medications.forEach { medicationWithReminders ->
@@ -261,18 +289,34 @@ fun MedicationListRoute(
                             .sortedBy { it.timeMinutesOfDay }
                             .joinToString(", ") { it.timeMinutesOfDay.toReminderTimeText() }
                         val doseAndFrequencyFallback = stringResource(R.string.medication_dose_and_frequency_not_set)
-                        ElevatedCard(
+                        MedicalRecordSurfaceCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onEditMedication(medication.id) },
                         ) {
-                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
+                                    verticalAlignment = Alignment.Top,
                                 ) {
-                                    Text(medication.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        Text(
+                                            medication.name,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                        Text(
+                                            listOfNotNull(medication.dose, medication.frequency)
+                                                .joinToString(" / ")
+                                                .ifBlank { doseAndFrequencyFallback },
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
                                     AssistChip(
                                         onClick = { onEditMedication(medication.id) },
                                         label = {
@@ -288,25 +332,21 @@ fun MedicationListRoute(
                                         },
                                     )
                                 }
-                                Text(
-                                    listOfNotNull(medication.dose, medication.frequency)
-                                        .joinToString(" / ")
-                                        .ifBlank { doseAndFrequencyFallback },
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Text(
-                                    stringResource(
-                                        R.string.medication_date_range,
-                                        medication.startDate.format(dateFormatter),
-                                        medication.endDate?.format(dateFormatter) ?: stringResource(R.string.status_ongoing),
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    MedicalRecordInfoPill(
+                                        text = stringResource(
+                                            R.string.medication_date_range,
+                                            medication.startDate.format(dateFormatter),
+                                            medication.endDate?.format(dateFormatter) ?: stringResource(R.string.status_ongoing),
+                                        ),
+                                        icon = Icons.Outlined.Schedule,
+                                        accent = true,
+                                    )
+                                }
                                 if (reminderSummary.isNotBlank()) {
-                                    Text(
-                                        stringResource(R.string.medication_reminder_summary, reminderSummary),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        style = MaterialTheme.typography.bodySmall,
+                                    MedicalRecordInfoPill(
+                                        text = stringResource(R.string.medication_reminder_summary, reminderSummary),
+                                        icon = Icons.Outlined.Schedule,
                                     )
                                 }
                             }
@@ -356,21 +396,13 @@ fun MedicationEditorRoute(
         }
     }
 
-    Scaffold(
+    MedicalRecordScreenScaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        stringResource(
-                            if (formState.id == null) R.string.new_medication else R.string.edit_medication,
-                        ),
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                    }
-                },
+            MedicalRecordTopAppBar(
+                title = stringResource(
+                    if (formState.id == null) R.string.new_medication else R.string.edit_medication,
+                ),
+                onNavigateBack = onNavigateBack,
                 actions = {
                     if (formState.id != null) {
                         IconButton(onClick = { confirmDelete = true }) {
@@ -391,84 +423,108 @@ fun MedicationEditorRoute(
                     .fillMaxSize()
                     .padding(innerPadding)
                     .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                OutlinedTextField(
-                    value = formState.name,
-                    onValueChange = { value -> viewModel.update { it.copy(name = value) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.label_medication_name_required)) },
-                    singleLine = true,
+                MedicalRecordHeroCard(
+                    title = stringResource(
+                        if (formState.id == null) R.string.new_medication else R.string.edit_medication,
+                    ),
+                    subtitle = stringResource(R.string.medication_form_hero_subtitle),
+                    icon = Icons.Outlined.Medication,
                 )
-                OutlinedTextField(
-                    value = formState.dose,
-                    onValueChange = { value -> viewModel.update { it.copy(dose = value) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.label_dose)) },
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = formState.frequency,
-                    onValueChange = { value -> viewModel.update { it.copy(frequency = value) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.label_frequency)) },
-                    singleLine = true,
-                )
-                OutlinedButton(
-                    onClick = {
-                        context.pickMedicationDate(formState.startDate) { selected ->
-                            viewModel.update { it.copy(startDate = selected) }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
+                MedicalRecordSectionCard(
+                    title = stringResource(R.string.section_medication_basics),
+                    subtitle = stringResource(R.string.section_medication_basics_subtitle),
                 ) {
-                    Text(stringResource(R.string.start_date_value, formState.startDate.format(dateFormatter)))
-                }
-                OutlinedButton(
-                    onClick = {
-                        context.pickMedicationDate(formState.endDate ?: LocalDate.now()) { selected ->
-                            viewModel.update { it.copy(endDate = selected) }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        stringResource(
-                            R.string.end_date_value,
-                            formState.endDate?.format(dateFormatter) ?: stringResource(R.string.value_not_set),
-                        ),
+                    MedicalRecordTextField(
+                        value = formState.name,
+                        onValueChange = { value: String -> viewModel.update { it.copy(name = value) } },
+                        label = stringResource(R.string.label_medication_name_required),
+                        singleLine = true,
+                    )
+                    MedicalRecordTextField(
+                        value = formState.dose,
+                        onValueChange = { value: String -> viewModel.update { it.copy(dose = value) } },
+                        label = stringResource(R.string.label_dose),
+                        singleLine = true,
+                    )
+                    MedicalRecordTextField(
+                        value = formState.frequency,
+                        onValueChange = { value: String -> viewModel.update { it.copy(frequency = value) } },
+                        label = stringResource(R.string.label_frequency),
+                        singleLine = true,
                     )
                 }
-                if (formState.endDate != null) {
-                    TextButton(onClick = { viewModel.update { it.copy(endDate = null) } }) {
-                        Text(stringResource(R.string.action_clear_end_date))
+                MedicalRecordSectionCard(
+                    title = stringResource(R.string.section_medication_schedule),
+                    subtitle = stringResource(R.string.section_medication_schedule_subtitle),
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            context.pickMedicationDate(formState.startDate) { selected ->
+                                viewModel.update { it.copy(startDate = selected) }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.start_date_value, formState.startDate.format(dateFormatter)))
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            context.pickMedicationDate(formState.endDate ?: LocalDate.now()) { selected ->
+                                viewModel.update { it.copy(endDate = selected) }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            stringResource(
+                                R.string.end_date_value,
+                                formState.endDate?.format(dateFormatter) ?: stringResource(R.string.value_not_set),
+                            ),
+                        )
+                    }
+                    if (formState.endDate != null) {
+                        TextButton(onClick = { viewModel.update { it.copy(endDate = null) } }) {
+                            Text(stringResource(R.string.action_clear_end_date))
+                        }
                     }
                 }
-                MedicationReminderSection(
-                    reminderMinutesOfDay = formState.reminderMinutesOfDay,
-                    onAddReminderTime = {
-                        context.pickMedicationTime(null) { selectedMinutes ->
-                            viewModel.addReminderTime(selectedMinutes)
-                        }
-                    },
-                    onEditReminderTime = { index, currentMinutes ->
-                        context.pickMedicationTime(currentMinutes) { selectedMinutes ->
-                            viewModel.updateReminderTime(index, selectedMinutes)
-                        }
-                    },
-                    onDeleteReminderTime = { index ->
-                        viewModel.removeReminderTime(index)
-                    },
-                )
-                OutlinedTextField(
-                    value = formState.notes,
-                    onValueChange = { value -> viewModel.update { it.copy(notes = value) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.label_notes)) },
-                    minLines = 3,
-                )
-                Button(
+                MedicalRecordSectionCard(
+                    title = stringResource(R.string.section_medication_reminders),
+                    subtitle = stringResource(R.string.medication_reminders_helper),
+                ) {
+                    MedicationReminderSection(
+                        reminderMinutesOfDay = formState.reminderMinutesOfDay,
+                        onAddReminderTime = {
+                            context.pickMedicationTime(null) { selectedMinutes ->
+                                viewModel.addReminderTime(selectedMinutes)
+                            }
+                        },
+                        onEditReminderTime = { index: Int, currentMinutes: Int ->
+                            context.pickMedicationTime(currentMinutes) { selectedMinutes ->
+                                viewModel.updateReminderTime(index, selectedMinutes)
+                            }
+                        },
+                        onDeleteReminderTime = { index: Int ->
+                            viewModel.removeReminderTime(index)
+                        },
+                    )
+                }
+                MedicalRecordSectionCard(
+                    title = stringResource(R.string.label_notes),
+                    subtitle = stringResource(R.string.section_notes_subtitle),
+                ) {
+                    MedicalRecordTextField(
+                        value = formState.notes,
+                        onValueChange = { value: String -> viewModel.update { it.copy(notes = value) } },
+                        label = stringResource(R.string.label_notes),
+                        minLines = 3,
+                    )
+                }
+                MedicalRecordPrimaryButton(
+                    text = stringResource(R.string.action_save_medication),
                     onClick = {
                         scope.launch {
                             val persistedReminderIds = formState.persistedReminderIds
@@ -504,9 +560,7 @@ fun MedicationEditorRoute(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = formState.name.isNotBlank(),
-                ) {
-                    Text(stringResource(R.string.action_save_medication))
-                }
+                )
             }
         }
     }
@@ -606,41 +660,57 @@ private fun MedicationReminderSection(
     onEditReminderTime: (Int, Int) -> Unit,
     onDeleteReminderTime: (Int) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            stringResource(R.string.section_medication_reminders),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-            stringResource(R.string.medication_reminders_helper),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (reminderMinutesOfDay.isEmpty()) {
             Text(
                 stringResource(R.string.empty_medication_reminders),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             reminderMinutesOfDay.forEachIndexed { index, minutesOfDay ->
-                Row(
+                Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    shape = RoundedCornerShape(20.dp),
                 ) {
-                    OutlinedButton(
-                        onClick = { onEditReminderTime(index, minutesOfDay) },
-                        modifier = Modifier.weight(1f),
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(minutesOfDay.toReminderTimeText())
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(onClick = { onDeleteReminderTime(index) }) {
-                        Icon(
-                            Icons.Outlined.Delete,
-                            contentDescription = stringResource(R.string.cd_delete_reminder_time),
-                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                shape = RoundedCornerShape(14.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                ) {
+                                    Icon(Icons.Outlined.Schedule, contentDescription = null)
+                                }
+                            }
+                            Text(
+                                minutesOfDay.toReminderTimeText(),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = { onEditReminderTime(index, minutesOfDay) }) {
+                                Text(stringResource(R.string.action_edit))
+                            }
+                            IconButton(onClick = { onDeleteReminderTime(index) }) {
+                                Icon(
+                                    Icons.Outlined.Delete,
+                                    contentDescription = stringResource(R.string.cd_delete_reminder_time),
+                                )
+                            }
+                        }
                     }
                 }
             }
