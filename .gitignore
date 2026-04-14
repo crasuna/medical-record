@@ -5,3 +5,10 @@ Desktop.ini
 *.tmp
 *.temp
 *.log
+.gradle/
+local.properties
+build/
+*/build/
+captures/
+.idea/
+*.iml

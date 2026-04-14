@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Medical Record</string>
+    <string name="nav_encounters">Encounters</string>
+    <string name="nav_medications">Medications</string>
+
+    <string name="screen_encounters_title">Encounters</string>
+    <string name="cd_add_encounter">Add encounter</string>
+    <string name="empty_no_encounters_title">No encounters yet</string>
+    <string name="empty_no_encounters_subtitle">Create an encounter first. Attachments are managed inside encounter details.</string>
+    <string name="encounter_department_and_doctor_not_set">Department and doctor not set</string>
+    <string name="encounter_diagnosis_not_set">Diagnosis not set</string>
+    <string name="new_encounter">New encounter</string>
+    <string name="edit_encounter">Edit encounter</string>
+    <string name="action_back">Back</string>
+    <string name="label_hospital">Hospital</string>
+    <string name="label_hospital_required">Hospital *</string>
+    <string name="label_department">Department</string>
+    <string name="label_doctor">Doctor</string>
+    <string name="label_chief_complaint">Chief complaint</string>
+    <string name="label_diagnosis">Diagnosis</string>
+    <string name="label_disposition">Disposition</string>
+    <string name="label_notes">Notes</string>
+    <string name="action_save_encounter">Save encounter</string>
+    <string name="encounter_attachments_after_saving">Attachments are added after saving.</string>
+    <string name="camera_attachment_name">Camera_%1$d.jpg</string>
+    <string name="screen_encounter_detail_title">Encounter detail</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_delete">Delete</string>
+    <string name="label_visit_time">Visit time</string>
+    <string name="value_not_set">Not set</string>
+    <string name="section_attachments">Attachments</string>
+    <string name="action_capture">Capture</string>
+    <string name="action_import_image">Import image</string>
+    <string name="action_import_pdf">Import PDF</string>
+    <string name="empty_no_attachments">No attachments</string>
+    <string name="dialog_delete_encounter_title">Delete encounter?</string>
+    <string name="dialog_delete_encounter_text">This also removes all attachments under this encounter.</string>
+    <string name="dialog_delete_attachment_title">Delete attachment?</string>
+    <string name="dialog_delete_attachment_text">This removes the selected file from storage.</string>
+    <string name="dialog_action_cancel">Cancel</string>
+    <string name="screen_attachment_preview_title">Attachment preview</string>
+    <string name="empty_preview_unavailable_title">Preview unavailable</string>
+    <string name="empty_preview_unavailable_subtitle">Return to encounter detail and try again.</string>
+    <string name="attachment_image_type">Image attachment</string>
+    <string name="cd_delete_attachment">Delete attachment</string>
+    <string name="action_previous">Previous</string>
+    <string name="action_next">Next</string>
+    <string name="pdf_page_indicator">Page %1$d / %2$d</string>
+    <string name="cd_pdf_preview">PDF preview</string>
+    <string name="section_visit_date_time">Visit date and time</string>
+    <string name="action_select_time">Select time</string>
+    <string name="action_clear_time">Clear time</string>
+    <string name="attachment_fallback_name">Attachment %1$s</string>
+
+    <string name="screen_medications_title">Medications</string>
+    <string name="cd_add_medication">Add medication</string>
+    <string name="filter_current">Current</string>
+    <string name="filter_all">All</string>
+    <string name="filter_ended">Ended</string>
+    <string name="empty_no_medications_title">No medication records yet</string>
+    <string name="empty_no_medications_subtitle">Track medicine name, dose, frequency, and date range.</string>
+    <string name="medication_dose_and_frequency_not_set">Dose and frequency not set</string>
+    <string name="status_ongoing">Ongoing</string>
+    <string name="medication_date_range">%1$s - %2$s</string>
+    <string name="new_medication">New medication</string>
+    <string name="edit_medication">Edit medication</string>
+    <string name="label_medication_name_required">Medication name *</string>
+    <string name="label_dose">Dose</string>
+    <string name="label_frequency">Frequency</string>
+    <string name="start_date_value">Start date: %1$s</string>
+    <string name="end_date_value">End date: %1$s</string>
+    <string name="action_clear_end_date">Clear end date</string>
+    <string name="action_save_medication">Save medication</string>
+    <string name="dialog_delete_medication_title">Delete medication?</string>
+    <string name="dialog_delete_medication_text">This action cannot be undone.</string>
+
+    <plurals name="attachments_count">
+        <item quantity="one">%1$d attachment</item>
+        <item quantity="other">%1$d attachments</item>
+    </plurals>
+    <plurals name="attachment_pdf_pages">
+        <item quantity="one">PDF %1$d page</item>
+        <item quantity="other">PDF %1$d pages</item>
+    </plurals>
+</resources>
