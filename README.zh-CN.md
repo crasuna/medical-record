@@ -6,6 +6,14 @@ English version: [README.md](README.md)
 
 ## 当前 MVP 范围
 
+- 首页总览
+  - 概览统计
+  - 最近就诊
+  - 当前用药
+  - 今日提醒
+- 全局搜索
+  - 统一搜索就诊和用药
+  - 支持按附件文件名检索就诊
 - 就诊时间线
 - 就诊详情页
 - 就诊附件
@@ -34,6 +42,8 @@ English version: [README.md](README.md)
 
 - `app/src/main/java/com/crasuna/medicalrecord/MainActivity.kt`
   - 应用外壳和导航
+- `app/src/main/java/com/crasuna/medicalrecord/HomeFeature.kt`
+  - 首页总览、聚合逻辑和全局搜索 UI
 - `app/src/main/java/com/crasuna/medicalrecord/EncounterFeature.kt`
   - 就诊列表、编辑、详情和附件预览 UI
 - `app/src/main/java/com/crasuna/medicalrecord/MedicationFeature.kt`
@@ -106,4 +116,4 @@ adb shell am start -n com.crasuna.medicalrecord/.MainActivity
 
 - UI 现已通过 Android 字符串资源同时支持英文和简体中文。
 - 当前 MVP 仅支持单个患者。
-- 云同步、OCR、导出、提醒和应用锁故意不在此版本范围内。
+- 云同步、OCR、导出、应用锁和独立设置页故意不在此版本范围内。

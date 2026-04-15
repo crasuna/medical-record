@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.EventNote
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Medication
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +41,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dagger.hilt.android.AndroidEntryPoint
 
+private const val HOME_ROUTE = "home"
 private const val ENCOUNTERS_ROUTE = "encounters"
 private const val ENCOUNTER_FORM_ROUTE = "encounterForm"
 private const val ENCOUNTER_DETAIL_ROUTE = "encounterDetail"
@@ -87,6 +89,7 @@ private fun MedicalRecordAppRoot(
 ) {
     val navController = rememberNavController()
     val destinations = listOf(
+        TopLevelDestination(HOME_ROUTE, R.string.nav_home, Icons.Outlined.Home),
         TopLevelDestination(ENCOUNTERS_ROUTE, R.string.nav_encounters, Icons.Outlined.EventNote),
         TopLevelDestination(MEDICATIONS_ROUTE, R.string.nav_medications, Icons.Outlined.Medication),
     )
@@ -95,16 +98,19 @@ private fun MedicalRecordAppRoot(
     val showBottomBar = destinations.any { top ->
         currentDestination?.hierarchy?.any { it.route == top.route } == true
     }
+    val navigateToTopLevel: (String) -> Unit = { route ->
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
 
     LaunchedEffect(openMedicationId) {
         if (!openMedicationId.isNullOrBlank()) {
-            navController.navigate(MEDICATIONS_ROUTE) {
-                popUpTo(navController.graph.findStartDestination().id) {
-                    saveState = false
-                }
-                launchSingleTop = true
-                restoreState = false
-            }
+            navigateToTopLevel(MEDICATIONS_ROUTE)
             navController.navigate("$MEDICATION_FORM_ROUTE?medicationId=$openMedicationId")
             onOpenMedicationHandled()
         }
@@ -137,13 +143,7 @@ private fun MedicalRecordAppRoot(
                                     NavigationBarItem(
                                         selected = selected,
                                         onClick = {
-                                            navController.navigate(destination.route) {
-                                                popUpTo(navController.graph.findStartDestination().id) {
-                                                    saveState = true
-                                                }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
+                                            navigateToTopLevel(destination.route)
                                         },
                                         icon = { Icon(destination.icon, contentDescription = label) },
                                         label = { Text(label) },
@@ -164,9 +164,25 @@ private fun MedicalRecordAppRoot(
         ) { innerPadding ->
             NavHost(
                 navController = navController,
-                startDestination = ENCOUNTERS_ROUTE,
+                startDestination = HOME_ROUTE,
                 modifier = Modifier.padding(innerPadding),
             ) {
+                composable(HOME_ROUTE) {
+                    HomeRoute(
+                        onCreateEncounter = {
+                            navigateToTopLevel(ENCOUNTERS_ROUTE)
+                            navController.navigate(ENCOUNTER_FORM_ROUTE)
+                        },
+                        onCreateMedication = {
+                            navigateToTopLevel(MEDICATIONS_ROUTE)
+                            navController.navigate(MEDICATION_FORM_ROUTE)
+                        },
+                        onOpenEncounter = { id -> navController.navigate("$ENCOUNTER_DETAIL_ROUTE/$id") },
+                        onEditMedication = { id -> navController.navigate("$MEDICATION_FORM_ROUTE?medicationId=$id") },
+                        onOpenEncounters = { navigateToTopLevel(ENCOUNTERS_ROUTE) },
+                        onOpenMedications = { navigateToTopLevel(MEDICATIONS_ROUTE) },
+                    )
+                }
                 composable(ENCOUNTERS_ROUTE) {
                     EncounterListRoute(
                         onCreateEncounter = { navController.navigate(ENCOUNTER_FORM_ROUTE) },

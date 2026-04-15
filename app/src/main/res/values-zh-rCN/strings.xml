@@ -1,8 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">医疗记录</string>
+    <string name="nav_home">首页</string>
     <string name="nav_encounters">就诊</string>
     <string name="nav_medications">用药</string>
+
+    <string name="screen_home_title">首页</string>
+    <string name="home_hero_subtitle">先看一眼全局概览，再从就诊、用药和附件里快速找到你要的记录。</string>
+    <string name="label_global_search">搜索</string>
+    <string name="home_search_placeholder">搜索医院、诊断、药品、备注或附件文件名</string>
+    <string name="section_home_overview">概览</string>
+    <string name="section_home_overview_subtitle">用一个平衡的首页查看记录规模、当前疗程和今日提醒。</string>
+    <string name="overview_total_encounters">总就诊数</string>
+    <string name="overview_total_attachments">总附件数</string>
+    <string name="overview_current_medications">当前用药数</string>
+    <string name="overview_today_reminders">今日提醒数</string>
+    <string name="section_recent_encounters">最近就诊</string>
+    <string name="section_recent_encounters_subtitle">快速回看最近的医院、诊断和附件记录。</string>
+    <string name="section_current_medications">当前用药</string>
+    <string name="section_current_medications_subtitle">查看仍在进行中的疗程与提醒安排。</string>
+    <string name="section_today_reminders">今日提醒</string>
+    <string name="section_today_reminders_subtitle">展示今天处于生效区间内的用药提醒。</string>
+    <string name="action_view_all">查看全部</string>
+    <string name="home_empty_recent_encounters">暂时没有可展示的最近就诊。</string>
+    <string name="home_empty_current_medications">当前没有进行中的用药计划。</string>
+    <string name="home_empty_today_reminders">今天没有已安排的用药提醒。</string>
+    <string name="search_results_encounters">就诊结果</string>
+    <string name="search_results_medications">用药结果</string>
+    <string name="home_search_empty_title">没有找到匹配记录</string>
+    <string name="home_search_empty_subtitle">没有找到与“%1$s”相关的内容。可以试试医院名、诊断、药品名或附件文件名。</string>
 
     <string name="screen_encounters_title">就诊</string>
     <string name="cd_add_encounter">添加就诊</string>

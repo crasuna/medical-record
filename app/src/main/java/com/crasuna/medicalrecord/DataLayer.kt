@@ -372,6 +372,7 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
 
 interface EncounterRepository {
     fun observeSummaries(): Flow<List<EncounterSummary>>
+    fun observeEncounterDetails(): Flow<List<EncounterWithAttachments>>
     fun observeEncounter(id: String): Flow<EncounterWithAttachments?>
     suspend fun getEncounter(id: String): EncounterEntity?
     suspend fun saveEncounter(encounter: EncounterEntity): String
@@ -393,6 +394,7 @@ interface AttachmentRepository {
 }
 
 interface MedicationRepository {
+    fun observeAllMedications(): Flow<List<MedicationWithReminders>>
     fun observeMedications(filter: Flow<MedicationFilter>): Flow<List<MedicationWithReminders>>
     suspend fun getMedication(id: String): MedicationWithReminders?
     suspend fun saveMedication(medication: MedicationEntity, reminderMinutesOfDay: List<Int>): String
@@ -408,6 +410,8 @@ class OfflineEncounterRepository @Inject constructor(
     private val ioDispatcher: CoroutineDispatcher,
 ) : EncounterRepository {
     override fun observeSummaries(): Flow<List<EncounterSummary>> = encounterDao.observeSummaries()
+
+    override fun observeEncounterDetails(): Flow<List<EncounterWithAttachments>> = encounterDao.observeEncounterDetails()
 
     override fun observeEncounter(id: String): Flow<EncounterWithAttachments?> = encounterDao.observeEncounter(id)
 
@@ -562,6 +566,8 @@ class OfflineMedicationRepository @Inject constructor(
     private val medicationReminderDao: MedicationReminderDao,
     private val ioDispatcher: CoroutineDispatcher,
 ) : MedicationRepository {
+    override fun observeAllMedications(): Flow<List<MedicationWithReminders>> = medicationDao.observeAllWithReminders()
+
     override fun observeMedications(filter: Flow<MedicationFilter>): Flow<List<MedicationWithReminders>> {
         return medicationDao.observeAllWithReminders().combine(filter) { medications, selectedFilter ->
             medications.filterBy(selectedFilter)

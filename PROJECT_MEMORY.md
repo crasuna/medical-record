@@ -10,10 +10,13 @@
 
 - `app/src/main/java/com/crasuna/medicalrecord/MainActivity.kt`
   - 负责应用壳、主题注入、底部导航和 Navigation Compose 路由入口。
-  - 当前一级页面只有 `encounters` 和 `medications`。
+  - 当前一级页面为 `home`、`encounters` 和 `medications`。
+- `app/src/main/java/com/crasuna/medicalrecord/HomeFeature.kt`
+  - 承担首页总览与全局搜索相关 Compose UI 和 ViewModel。
+  - 覆盖首页概览统计、最近就诊、当前用药、今日提醒和跨就诊/用药搜索结果分组展示。
 - `app/src/main/java/com/crasuna/medicalrecord/MedicalRecordDesignSystem.kt`
   - 承载当前共享设计系统。
-  - 包含自定义 `MedicalRecordTheme`、颜色、Typography、Shapes、间距 token，以及卡片、顶部栏、按钮、表单、空状态等复用 UI 组件。
+  - 包含自定义 `MedicalRecordTheme`、颜色、Typography、Shapes、间距 token，以及卡片、顶部栏、按钮、表单、搜索框、空状态等复用 UI 组件。
   - 当前视觉方向是浅色、干净、偏医疗专业感，不支持 dark mode。
 - `app/src/main/java/com/crasuna/medicalrecord/EncounterFeature.kt`
   - 承担就诊相关 Compose UI 和 ViewModel。
@@ -32,6 +35,7 @@
   - `RoomDatabase`
   - Repository 接口与实现
   - Hilt `AppModule`
+  - 首页聚合目前通过 Repository 暴露的全量就诊明细流和全量用药流在内存中完成，不依赖额外表或 FTS。
 - 当前核心数据模型：
   - `EncounterEntity`
   - `EncounterAttachmentEntity`
@@ -69,6 +73,15 @@
 - Launcher 图标已包含兼容型位图资源、adaptive icon 和 monochrome icon。
 
 ## 已实现功能
+
+### 首页总览与搜索
+
+- 新增首页一级入口，作为默认启动页。
+- 首页在空搜索时展示概览统计、最近就诊、当前用药和今日提醒。
+- 首页支持直接跳转到就诊列表、用药列表，以及快速新建就诊/用药。
+- 首页支持统一搜索就诊和用药，并按结果分组展示。
+- 就诊搜索覆盖医院、科室、医生、主诉、诊断、处置、备注和附件文件名。
+- 用药搜索覆盖药品名称、剂量、频次和备注。
 
 ### 就诊管理
 
@@ -150,8 +163,8 @@
   - 当前提醒只负责通知，不记录“已服药”“稍后提醒”或历史完成情况。
 - 数据层拆分
   - `DataLayer.kt` 已明显偏重，适合后续拆成多文件。
-- 更完整的视觉验收
-  - 当前医疗风格设计系统和主页面美化已完成，但每次新增页面或改动布局后，都应继续做中英文双语和小屏验收。
+- 导出与隐私增强
+  - 当前仍没有导出、应用锁和设置页，这些仍是医疗数据产品后续应优先补齐的能力。
 
 ## 维护规则
 

@@ -1,8 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Medical Record</string>
+    <string name="nav_home">Home</string>
     <string name="nav_encounters">Encounters</string>
     <string name="nav_medications">Medications</string>
+
+    <string name="screen_home_title">Home</string>
+    <string name="home_hero_subtitle">Start from one quiet overview, then search across visits and medications in seconds.</string>
+    <string name="label_global_search">Search</string>
+    <string name="home_search_placeholder">Search records, diagnoses, medications, or attachments</string>
+    <string name="section_home_overview">Overview</string>
+    <string name="section_home_overview_subtitle">A balanced snapshot of records, treatments, and reminders for today.</string>
+    <string name="overview_total_encounters">Total encounters</string>
+    <string name="overview_total_attachments">Total attachments</string>
+    <string name="overview_current_medications">Current medications</string>
+    <string name="overview_today_reminders">Today\'s reminders</string>
+    <string name="section_recent_encounters">Recent encounters</string>
+    <string name="section_recent_encounters_subtitle">The latest visits, diagnoses, and attached files at a glance.</string>
+    <string name="section_current_medications">Current medications</string>
+    <string name="section_current_medications_subtitle">Ongoing treatments that still need regular attention.</string>
+    <string name="section_today_reminders">Today\'s reminders</string>
+    <string name="section_today_reminders_subtitle">Scheduled medication reminders that are active for today.</string>
+    <string name="action_view_all">View all</string>
+    <string name="home_empty_recent_encounters">No recent encounters to show yet.</string>
+    <string name="home_empty_current_medications">No ongoing medications right now.</string>
+    <string name="home_empty_today_reminders">No medication reminders scheduled for today.</string>
+    <string name="search_results_encounters">Encounter results</string>
+    <string name="search_results_medications">Medication results</string>
+    <string name="home_search_empty_title">No matching records</string>
+    <string name="home_search_empty_subtitle">Nothing matched “%1$s”. Try a hospital name, diagnosis, medication, or attachment file name.</string>
 
     <string name="screen_encounters_title">Encounters</string>
     <string name="cd_add_encounter">Add encounter</string>
@@ -12,7 +38,8 @@
     <string name="encounter_department_and_doctor_not_set">Department and doctor not set</string>
     <string name="encounter_diagnosis_not_set">Diagnosis not set</string>
     <string name="new_encounter">New encounter</string>
-    <string name="edit_encounter">Edit encounter</string>    <string name="action_open_record">Open record</string>
+    <string name="edit_encounter">Edit encounter</string>
+    <string name="action_open_record">Open record</string>
     <string name="label_hospital">Hospital</string>
     <string name="label_hospital_required">Hospital *</string>
     <string name="label_department">Department</string>
