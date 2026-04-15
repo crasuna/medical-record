@@ -6,6 +6,14 @@ An offline-first Android app for managing personal medical history.
 
 ## Current MVP scope
 
+- Home overview dashboard
+  - Overview stats
+  - Recent encounters
+  - Current medications
+  - Today's reminders
+- Global search
+  - Search across encounters and medications
+  - Search encounter attachments by file name
 - Encounter timeline
 - Encounter detail view
 - Encounter attachments
@@ -34,6 +42,8 @@ An offline-first Android app for managing personal medical history.
 
 - `app/src/main/java/com/crasuna/medicalrecord/MainActivity.kt`
   - App shell and navigation
+- `app/src/main/java/com/crasuna/medicalrecord/HomeFeature.kt`
+  - Home dashboard, overview aggregation, and global search UI
 - `app/src/main/java/com/crasuna/medicalrecord/EncounterFeature.kt`
   - Encounter list, editor, detail, and attachment preview UI
 - `app/src/main/java/com/crasuna/medicalrecord/MedicationFeature.kt`
@@ -106,4 +116,4 @@ Instrumentation tests:
 
 - The UI now supports English and Simplified Chinese through Android string resources.
 - The app is single-patient only in the current MVP.
-- Cloud sync, OCR, export, reminders, and app lock are intentionally out of scope for this version.
+- Cloud sync, OCR, export, app lock, and a dedicated settings screen are intentionally out of scope for this version.
