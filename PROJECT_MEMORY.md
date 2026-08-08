@@ -1,179 +1,163 @@
 # 项目记忆
 
-## 项目概览
+## 项目定位
 
-`Medical Record` 是一个离线优先的 Android 病历管理应用，当前处于单患者本地管理的 MVP 阶段，重点覆盖就诊记录、附件留存、用药管理、本地提醒与加密存储。
+`Medical Record` 是一个离线优先、单患者、无账号的 Android 医疗记录应用。当前代码是保留 Git
+历史后的绿地式重建，不是旧 `com.crasuna.medicalrecord` 的原位升级。旧应用只作为功能、字段、
+信息结构与视觉参考；旧数据库、附件、Keystore、提醒状态、签名和安装兼容性均不迁移。
 
-## 当前架构
+- release identity：`com.loveluke.medicalrecord`
+- debug identity：`com.loveluke.medicalrecord.debug`
+- minSdk 26，compileSdk / targetSdk 37
+- schema version 1，versionCode 1
+- 默认英文，完整简体中文；跟随系统语言，无应用内语言页面
+- 浅色和深色主题；固定医疗青绿色色板，不使用动态取色
 
-### UI
+## v1 产品范围
 
-- `app/src/main/java/com/crasuna/medicalrecord/MainActivity.kt`
-  - 负责应用壳、主题注入、底部导航和 Navigation Compose 路由入口。
-  - 当前一级页面为 `home`、`encounters` 和 `medications`。
-- `app/src/main/java/com/crasuna/medicalrecord/HomeFeature.kt`
-  - 承担首页总览与全局搜索相关 Compose UI 和 ViewModel。
-  - 覆盖首页概览统计、最近就诊、当前用药、今日提醒和跨就诊/用药搜索结果分组展示。
-- `app/src/main/java/com/crasuna/medicalrecord/MedicalRecordDesignSystem.kt`
-  - 承载当前共享设计系统。
-  - 包含自定义 `MedicalRecordTheme`、颜色、Typography、Shapes、间距 token，以及卡片、顶部栏、按钮、表单、搜索框、空状态等复用 UI 组件。
-  - 当前视觉方向是浅色、干净、偏医疗专业感，不支持 dark mode。
-- `app/src/main/java/com/crasuna/medicalrecord/EncounterFeature.kt`
-  - 承担就诊相关 Compose UI 和 ViewModel。
-  - 覆盖就诊列表、就诊编辑、就诊详情、附件管理和附件预览。
-- `app/src/main/java/com/crasuna/medicalrecord/MedicationFeature.kt`
-  - 承担用药相关 Compose UI 和 ViewModel。
-  - 覆盖用药列表、筛选、用药编辑、删除确认和提醒时间编辑。
-  - 当前用药编辑页已采用分组卡片结构，并展示提醒区块。
+已实现：
 
-### 数据层
+- 首页概览、最近就诊、当前用药、今日提醒和全局搜索。
+- 就诊列表、详情、新建、编辑和删除。
+- 系统相机、Photo Picker 批量图片、SAF 批量 PDF 导入。
+- 图片与 PDF 加密存储、预览、隔离和删除。
+- 用药疗程、Current / Upcoming / Ended / All 筛选、多每日提醒时间。
+- exact alarm 能力降级、通知权限恢复、开机/升级/时间/时区变化后的提醒重排。
+- 手机底部导航、宽窗口 rail，以及就诊/用药列表详情双栏场景。
+- 最近任务隐私遮罩和两次确认的本机敏感数据清除。
 
-- `app/src/main/java/com/crasuna/medicalrecord/DataLayer.kt`
-  - 当前仍是聚合文件，同时承载：
-  - Room `Entity`
-  - `Dao`
-  - `RoomDatabase`
-  - Repository 接口与实现
-  - Hilt `AppModule`
-  - 首页聚合目前通过 Repository 暴露的全量就诊明细流和全量用药流在内存中完成，不依赖额外表或 FTS。
-- 当前核心数据模型：
-  - `EncounterEntity`
-  - `EncounterAttachmentEntity`
-  - `MedicationEntity`
-  - `MedicationReminderEntity`
-  - `MedicationWithReminders`
-- 当前数据库版本为 `2`，包含 `MIGRATION_1_2`，用于新增用药提醒表。
+明确不实现：账号、云同步、OCR、导出、应用锁、多患者切换 UI、服药打卡与依从性记录、DICOM、
+视频/音频/Office 附件、遥测。
 
-### 安全
+## 领域模型
 
-- `app/src/main/java/com/crasuna/medicalrecord/Security.kt`
-  - `SecurePassphraseManager` 负责数据库口令生成、封装与读取。
-  - `FileEncryptionManager` 负责附件文件和缩略图的 AES/GCM 加解密。
-- 结构化数据存储使用 SQLCipher。
-- 数据库口令和附件密钥通过 Android Keystore 保护。
+- `UserAccount` 是未来账号和同步身份，v1 不存在。
+- `PatientProfile` 是医疗数据所属患者。首次成功建库时创建一个隐藏默认 profile，使用随机 canonical
+  UUID；安装内稳定，v1 不展示患者管理入口。
+- `Encounter` 拥有零个或多个 `Attachment`。
+- `Medication` 表示一个含起始日与可选结束日的疗程；Current 语义是
+  `startDate <= today && (endDate == null || endDate >= today)`。
+- `Reminder` 是持久化的用户意图；通知权限、exact-alarm 能力和系统当前镜像的一个单次闹钟是不同
+  状态。
 
-### 国际化
+所有就诊、附件、用药和提醒均带 `patientId`。附件和提醒使用复合外键，防止跨患者父子引用；父对象
+更新使用 `@Upsert`，避免 SQLite `REPLACE` 触发级联删除。用药与归一化提醒在同一 Room 事务保存。
 
-- 应用名和 UI 文案已迁移到资源文件。
-- 英文资源位于 `app/src/main/res/values/strings.xml`。
-- 简体中文资源位于 `app/src/main/res/values-zh-rCN/strings.xml`。
-- 当前语言策略为跟随系统语言，不支持应用内手动切换。
+## 源码与架构
 
-### 平台集成
+项目只有一个 Gradle 模块 `:app`，源码根包为 `com.loveluke.medicalrecord`：
 
-- `app/src/main/java/com/crasuna/medicalrecord/MedicalRecordApp.kt`
-  - 作为 `@HiltAndroidApp` 的 `Application` 入口。
-  - 启动时初始化用药提醒通知渠道，并重同步有效提醒。
-- `app/src/main/AndroidManifest.xml`
-  - 注册 `MainActivity`、`FileProvider`、提醒相关 `BroadcastReceiver`。
-  - 已声明 `POST_NOTIFICATIONS`、`RECEIVE_BOOT_COMPLETED`、`SCHEDULE_EXACT_ALARM`。
-  - 已通过 `backup_rules.xml` 和 `data_extraction_rules.xml` 禁用云备份与设备迁移备份，避免本地医疗数据被系统自动迁移。
-- 附件导入依赖系统内容选择器、拍照返回和 `PdfRenderer`。
-- 用药提醒依赖 `AlarmManager`、系统通知和通知点击回到编辑页的参数跳转。
-- Launcher 图标已包含兼容型位图资源、adaptive icon 和 monochrome icon。
+- `app/`：Application、MainActivity、访问控制、DI、Navigation 3、提醒运行时协调与数据库实例登记。
+- `core/database/`：Room entity、DAO、Repository、SQLCipher 接入和 schema。
+- `core/security/`：Keystore wrapping key、secret envelope、fail-closed 解锁和本机数据清除。
+- `core/attachment/`：内容校验、AES-GCM 容器、导入、相机、预览、删除与孤儿文件清理。
+- `core/reminder/`：提醒计划、AlarmManager、Receiver、权限和通知。
+- `core/privacy/`：最近任务遮罩与截图策略。
+- `core/designsystem/`、`core/model/`：主题、共享组件和不可变模型。
+- `feature/home/`、`feature/encounter/`、`feature/medication/`：Compose UI 与 ViewModel。
 
-## 已实现功能
+调用链是 `Compose Screen -> ViewModel -> Repository/安全 façade -> Room/加密附件/系统适配器`。
+UI 使用不可变 `UiState`、用户 action、`StateFlow` 与 `collectAsStateWithLifecycle`。不使用完整 Clean
+Architecture、简单 UseCase 包装或第三方 MVI。
 
-### 首页总览与搜索
+导航采用可序列化 Navigation 3 key 与 `NavigationSuiteScaffold`。compact 使用 bottom bar，
+medium/expanded 使用 rail。就诊和用药使用稳定版自定义 Navigation 3 `SceneStrategy` 实现双栏，
+没有依赖 RC 版 `adaptive-navigation3`，也没有使用 `ListDetailPaneScaffold`。
 
-- 新增首页一级入口，作为默认启动页。
-- 首页在空搜索时展示概览统计、最近就诊、当前用药和今日提醒。
-- 首页支持直接跳转到就诊列表、用药列表，以及快速新建就诊/用药。
-- 首页支持统一搜索就诊和用药，并按结果分组展示。
-- 就诊搜索覆盖医院、科室、医生、主诉、诊断、处置、备注和附件文件名。
-- 用药搜索覆盖药品名称、剂量、频次和备注。
+## 数据库
 
-### 就诊管理
+Room 数据库从 schema v1 开始，`exportSchema = true`，JSON 位于：
 
-- 就诊列表展示。
-- 新建和编辑就诊。
-- 查看就诊详情。
-- 删除就诊。
-- 记录医院、科室、医生、主诉、诊断、处置、备注、就诊日期和时间。
-- 就诊相关页面已切换到统一的医疗风格卡片式布局。
+`app/schemas/com.loveluke.medicalrecord.core.database.AppDatabase/1.json`
 
-### 附件管理
+表：
 
-- 在就诊详情页内管理附件。
-- 支持拍照导入。
-- 支持导入图片。
-- 支持导入 PDF。
-- 支持缩略图与附件预览。
-- 支持删除附件。
-- PDF 预览支持页数显示和翻页。
+- `patient_profiles`
+- `encounters`
+- `attachments`
+- `medications`
+- `reminders`
+- `reminder_schedule_state`
 
-### 用药管理
+数据库通过 trigger 补强最多一个默认患者、提醒分钟范围、用药日期、必填就诊医院、附件类型/大小/
+路径/隔离状态等约束。内部附件路径只允许 UUID 形式的 `original/<id>.mra` 与
+`thumbnail/<id>.mrt`。
 
-- 用药列表展示。
-- `Current / All / Ended` 筛选。
-- 新建和编辑用药。
-- 删除用药。
-- 记录药品名称、剂量、频次、开始日期、结束日期和备注。
-- 支持为每个药品配置多个每日提醒时间。
-- 用药列表卡片显示日期区间和提醒摘要。
-- 提醒保存后会根据通知权限和 exact alarm 能力决定是否立即调度本地提醒。
-- 点击提醒通知会直接打开对应药品编辑页。
+## 安全存储与失败恢复
 
-### 本地安全存储
+- Android Keystore 中的不可导出 AES-256 key 不绑定生物识别或设备凭据，也不强制 StrongBox。
+- wrapping key 分别包装随机 SQLCipher 数据库口令和随机附件主密钥；带认证 envelope 位于
+  `noBackupFilesDir`。
+- 启动时先验证/provision 附件主密钥，再打开并运行时验证 SQLCipher、WAL 与 SQLite，创建/读取隐藏
+  默认患者，最后完成附件孤儿清理；全部成功后才发布 `Ready`。
+- 解锁失败会进入 `Locked`，不会静默重建密钥、删除数据或回退未加密 Room。
+- 用户清除本机数据必须两次确认并持有单次消费授权。清理只覆盖当前 variant 的闹钟、通知、数据库、
+  附件、envelope、临时明文、偏好和 Keystore alias；进入删除阶段后要求进程重启。
+- `allowBackup=false`，Android 12+ `dataExtractionRules` 与 Android 11- `fullBackupContent` 均明确
+  排除敏感数据。
 
-- 结构化数据使用 Room + SQLCipher。
-- 附件文件使用 AES/GCM 加密后落盘。
-- 数据库口令和附件密钥使用 Android Keystore 保护。
-- 当前工作模式为离线优先、本地单机。
+## 附件
 
-### 双语支持
+- 每批最多 10 个，单文件最多 50 MiB；一次就诊总附件数不设硬上限。
+- 允许 PDF/JPEG/PNG/WebP/HEIC/HEIF；拒绝视频、音频、Office、压缩包、SVG、GIF、TIFF、DICOM。
+- 同时验证声明 MIME、magic/结构和 Android 平台可解析性，流式实施大小限制，并逐项报告成功/失败。
+- URI 内容立即复制并加密，不依赖长期 URI 权限；内部路径使用 UUID，原文件名仅显示。
+- 每附件使用随机 AES-256 data key；attachment master key 只包装 data key。patient、encounter、
+  attachment、payload kind 和版本均进入 AAD。
+- 单附件认证/格式失败只隔离该附件；缩略图可重建。
+- 相机与预览临时明文在成功、失败、取消、生命周期退出和冷启动时清理；FileProvider 仅暴露相机根。
+- 删除通过同目录 tombstone 两阶段事务协调密文与 Room metadata，冷启动会依据数据库引用恢复或最终
+  删除 tombstone，避免部分删除造成不可恢复数据丢失。
 
-- UI 已支持英文和简体中文。
-- 应用名会随系统语言切换。
-- 提醒相关文案和通知渠道文案也已双语化。
-- README 采用双文件方案：`README.md` 和 `README.zh-CN.md`。
+## 提醒与隐私
 
-## 重要依赖与系统集成
+- 声明 `SCHEDULE_EXACT_ALARM`，不声明 `USE_EXACT_ALARM`。
+- 有授权时 `setExactAndAllowWhileIdle`；无授权时在通知可用的前提下降级
+  `setAndAllowWhileIdle` 并显示可能延迟。
+- 每次只安排全局下一次单次闹钟。开机、包升级、时间/时区变化、exact-alarm grant、Activity resume
+  和冷启动都会 reconcile。
+- 没有 `POST_NOTIFICATIONS` 时仍保存提醒意图，但取消平台闹钟并标记不可用；恢复权限后安排未来
+  提醒，不循环索权。
+- 通知 `VISIBILITY_PRIVATE`，public version 完全脱敏；private 内容只含药名、剂量和计划时间。
+- v1 无全屏通知、已服用或跳过 action。
+- API 33+ 调用 `setRecentsScreenshotEnabled(false)`；API 26–32 在非前台使用中性 Compose 遮罩和
+  临时 `FLAG_SECURE`。前台允许用户主动截图/录屏，不记录截图行为。
 
-- Kotlin
-- Jetpack Compose
-- Navigation Compose
-- Hilt
-- Room
-- SQLCipher
-- Android Keystore
-- AlarmManager
-- NotificationManagerCompat
-- Coil
-- `PdfRenderer`
-- `FileProvider`
+## 工具链和版本策略
 
-## 重要约束与已知问题
+- AGP 9.3.1，Gradle 9.7.0，Gradle daemon JDK 25。
+- Java toolchain/source/target 17，Kotlin JVM target 17。
+- AGP built-in Kotlin，不应用 `org.jetbrains.kotlin.android`。
+- higher KGP 与 Compose compiler 2.4.10、KSP 2.3.11、Hilt 2.60.1、Coroutines 1.11.0。
+- Room 2.8.4、SQLCipher Android 4.17.0、AndroidX SQLite/Framework 2.7.0。
+- 其他 AndroidX/Compose/Navigation 均在 version catalog 精确锁定稳定版；禁止动态版本和
+  alpha/beta/RC/snapshot。
 
-- 当前是单患者应用，没有多患者切换能力。
-- 当前没有云同步、账号体系、远程备份或跨端同步。
-- 当前没有 OCR、导出、应用锁、设置页。
-- 当前已有本地提醒，但没有服药打卡、依从性统计、提醒历史或稍后提醒。
-- `DataLayer.kt` 仍然过重，后续继续扩展时应考虑拆分为 `Entity / Dao / Repository / DI`。
-- `MedicationEntity.frequency` 仍是自由文本，这会限制后续自动推断提醒规则的可靠性。
-- 当前数据库 `exportSchema = false`，如果未来继续增加迁移，需要更严格地管理 schema 演进。
-- 用药提醒依赖系统通知权限和 Android 12+ exact alarm 能力；权限被关闭时，提醒配置会保留，但不会立即调度。
-- 在当前 PowerShell/终端链路下，中文 Markdown 和 XML 读取时可能显示乱码；这通常是终端编码问题，不一定代表文件内容损坏。后续查看中文文档时优先使用支持 UTF-8 的编辑器确认。
+AGP 9.3.1 + KGP 2.4.10 是可配置组合，但不宣称处于 JetBrains fully-supported 矩阵。如果真实构建
+故障能归因于 higher-KGP/Compose 覆盖，只移除该覆盖并恢复 AGP 内置版本。若可验证的设备问题能归因
+于 SQLite 2.7.0，只回退 SQLite 到 2.6.2。
 
-## 下一步待办
+## 签名与发布
 
-### 已讨论但未实现
+- debug 使用标准 debug key。
+- release 不得回退 debug key；没有凭据时仅做 unsigned release、R8 与 AAB 验证。
+- 外部签名入口变量：`MEDICAL_RECORD_STORE_FILE`、`MEDICAL_RECORD_STORE_PASSWORD`、
+  `MEDICAL_RECORD_KEY_ALIAS`、`MEDICAL_RECORD_KEY_PASSWORD`。必须 0 个或 4 个；部分配置直接失败。
+- Keystore、`.jks` 和密码不得进入 Git；不在日常开发中创建长期正式签名密钥。
 
-- 服药打卡与依从性统计
-  - 当前提醒只负责通知，不记录“已服药”“稍后提醒”或历史完成情况。
-- 数据层拆分
-  - `DataLayer.kt` 已明显偏重，适合后续拆成多文件。
-- 导出与隐私增强
-  - 当前仍没有导出、应用锁和设置页，这些仍是医疗数据产品后续应优先补齐的能力。
+## 测试与发布门禁
+
+JVM 测试覆盖 Repository、关键 ViewModel、Room 约束、密钥 envelope、附件加密/篡改/清理、提醒、
+Navigation scene 和隐私行为。Android instrumentation 覆盖真实 Room + SQLCipher 建库/重开/错误
+密钥/WAL/事务与 Android Keystore 行为。
+
+发布前必须重新执行完整 Gradle gate，并在设备上覆盖 API 26、最新 API、16 KiB page size、手机、
+折叠屏、平板/桌面窗口、浅深色、英中、大字体、权限拒绝/恢复、重启、时区变化、最近任务遮罩，
+以及相机/Photo Picker/SAF。若本机没有设备，必须明确写“instrumentation 已编译但未执行”，不能
+把编译成功描述为设备门禁通过。
 
 ## 维护规则
 
-- 只要发生以下变化，就必须同步更新本文件：
-  - 新增或删除功能
-  - 架构拆分或模块边界变化
-  - 数据模型、数据库版本或迁移变化
-  - 权限、通知、后台任务、系统集成变化
-  - 国际化策略变化
-  - 重要约束、已知问题或下一步优先级变化
-- 本文件记录“当前真实状态”和“已明确但未实现的方向”，不要把讨论中的能力写成已完成。
-- 本文件不是提交日志，不记录每次小改动，只保留对后续实现判断有长期价值的信息。
+- 本文件记录当前真实状态和长期约束，不是提交日志。
+- 功能范围、架构边界、数据模型/schema、安全/权限、后台行为、国际化或发布策略发生变化时同步更新。
+- 未在真实设备验证的行为不得写成已经通过设备门禁。

@@ -1,6 +1,10 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <lint>
+    <!--
+      The app intentionally keeps density PNG compatibility icons beside API 26 adaptive icons.
+      Keeping the v26 qualifier prevents the adaptive XML resources from shadowing those PNGs.
+    -->
     <issue id="ObsoleteSdkInt">
-        <ignore path="app/src/main/res/mipmap-anydpi-v26" />
+        <ignore regexp="mipmap-anydpi-v26" />
     </issue>
 </lint>

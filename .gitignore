@@ -6,9 +6,14 @@ Desktop.ini
 *.temp
 *.log
 .gradle/
+.kotlin/
 local.properties
 build/
 */build/
 captures/
 .idea/
 *.iml
+*.jks
+*.keystore
+keystore.properties
+signing.properties
