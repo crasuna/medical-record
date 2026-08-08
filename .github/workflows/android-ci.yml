@@ -1,0 +1,89 @@
+name: Android CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verification:
+    name: Verify Android project
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JetBrains JDK 25
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: jetbrains
+          java-version: "25"
+          java-package: jdk
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Ensure Android SDK 37
+        shell: bash
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-37.0" \
+            "build-tools;37.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+
+      - name: Run verification gates
+        shell: bash
+        run: |
+          # gradlew is tracked as 100644, so invoke it through bash on Linux.
+          # Release signing variables are intentionally absent; release outputs stay unsigned.
+          bash ./gradlew \
+            --continue \
+            --warning-mode=all \
+            --stacktrace \
+            testDebugUnitTest \
+            compileDebugAndroidTestKotlin \
+            lintDebug \
+            assembleDebug \
+            assembleRelease \
+            bundleRelease
+
+      - name: Verify clean Git working tree
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        shell: bash
+        run: |
+          status="$(git status --porcelain=v1 --untracked-files=all)"
+          if [[ -n "${status}" ]]; then
+            echo "::error::The build changed the Git working tree. Commit generated sources such as Room schemas."
+            printf '%s\n' "${status}"
+            exit 1
+          fi
+
+      - name: Upload failure reports
+        if: ${{ failure() && steps.checkout.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-ci-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/test-results/testDebugUnitTest/
+            app/build/reports/lint-results-debug.*
+          if-no-files-found: ignore
+          retention-days: 14
