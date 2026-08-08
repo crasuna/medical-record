@@ -1,9 +1,11 @@
 package com.loveluke.medicalrecord.app.storage
 
 import com.loveluke.medicalrecord.core.attachment.AttachmentOrphanCleaner
+import com.loveluke.medicalrecord.core.attachment.AttachmentOrphanCleanupReport
 import com.loveluke.medicalrecord.core.attachment.AttachmentRelativePath
 import com.loveluke.medicalrecord.core.attachment.PlaintextColdStartCleanupReport
 import com.loveluke.medicalrecord.core.attachment.TemporaryPlaintextRegistry
+import com.loveluke.medicalrecord.core.attachment.UnsafeAttachmentPathException
 import com.loveluke.medicalrecord.core.database.AppDatabase
 import javax.inject.Inject
 import javax.inject.Provider
@@ -15,7 +17,22 @@ import kotlinx.coroutines.withContext
 internal interface LocalStorageMaintenanceGateway {
     suspend fun removeStalePlaintext(): PlaintextColdStartCleanupReport
 
-    suspend fun removeUnreferencedCiphertext()
+    suspend fun removeUnreferencedCiphertext(): CiphertextMaintenanceResult
+}
+
+sealed interface CiphertextMaintenanceResult {
+    data class Complete(
+        val cleanupReport: AttachmentOrphanCleanupReport,
+    ) : CiphertextMaintenanceResult
+
+    data class Incomplete(
+        val cleanupReport: AttachmentOrphanCleanupReport?,
+        val invalidStoredAttachmentPathCount: Int = 0,
+    ) : CiphertextMaintenanceResult {
+        init {
+            require(cleanupReport != null || invalidStoredAttachmentPathCount > 0)
+        }
+    }
 }
 
 @Singleton
@@ -42,23 +59,47 @@ class LocalStorageMaintenance internal constructor(
             temporaryPlaintextRegistry.cleanupOnColdStart()
         }
 
-    override suspend fun removeUnreferencedCiphertext() {
+    override suspend fun removeUnreferencedCiphertext(): CiphertextMaintenanceResult =
         withContext(ioDispatcher) {
             val rows = databaseProvider.get().encounterDao().getAllStoredAttachmentPaths()
             val parsedPaths = mutableSetOf<AttachmentRelativePath>()
+            var invalidStoredPathCount = 0
             for (row in rows) {
-                val original = runCatching {
+                val original = try {
                     AttachmentRelativePath.parseStored(row.originalRelativePath)
-                }.getOrNull() ?: return@withContext
-                parsedPaths += original
+                } catch (_: UnsafeAttachmentPathException) {
+                    invalidStoredPathCount += 1
+                    null
+                }
+                if (original != null) parsedPaths += original
                 row.thumbnailRelativePath?.let { rawThumbnail ->
-                    val thumbnail = runCatching {
+                    val thumbnail = try {
                         AttachmentRelativePath.parseStored(rawThumbnail)
-                    }.getOrNull() ?: return@withContext
-                    parsedPaths += thumbnail
+                    } catch (_: UnsafeAttachmentPathException) {
+                        invalidStoredPathCount += 1
+                        null
+                    }
+                    if (thumbnail != null) parsedPaths += thumbnail
                 }
             }
-            attachmentOrphanCleaner.clean(parsedPaths)
+            if (invalidStoredPathCount > 0) {
+                return@withContext CiphertextMaintenanceResult.Incomplete(
+                    cleanupReport = null,
+                    invalidStoredAttachmentPathCount = invalidStoredPathCount,
+                )
+            }
+
+            val cleanupReport = attachmentOrphanCleaner.clean(parsedPaths)
+            if (cleanupReport.blocksReady()) {
+                CiphertextMaintenanceResult.Incomplete(cleanupReport)
+            } else {
+                CiphertextMaintenanceResult.Complete(cleanupReport)
+            }
         }
-    }
+
+    private fun AttachmentOrphanCleanupReport.blocksReady(): Boolean =
+        scanFailed ||
+            failedDeletes > 0 ||
+            failedDeletingOperations > 0 ||
+            deletingConflicts > 0
 }

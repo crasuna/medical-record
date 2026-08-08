@@ -2,7 +2,9 @@ package com.loveluke.medicalrecord.app.access
 
 import com.loveluke.medicalrecord.app.di.DatabaseFailClosedException
 import com.loveluke.medicalrecord.app.di.DatabaseOpenFailure
+import com.loveluke.medicalrecord.app.storage.CiphertextMaintenanceResult
 import com.loveluke.medicalrecord.app.storage.LocalStorageMaintenanceGateway
+import com.loveluke.medicalrecord.core.attachment.AttachmentOrphanCleanupReport
 import com.loveluke.medicalrecord.core.attachment.PlaintextColdStartCleanupReport
 import com.loveluke.medicalrecord.core.database.PatientRepository
 import com.loveluke.medicalrecord.core.model.PatientProfile
@@ -338,12 +340,27 @@ private class FakeStorageMaintenance(
         }
     }
 
-    override suspend fun removeUnreferencedCiphertext() {
+    override suspend fun removeUnreferencedCiphertext(): CiphertextMaintenanceResult {
         orphanCalls += 1
         events += "orphan"
         onOrphan()
+        return CiphertextMaintenanceResult.Complete(successfulOrphanCleanupReport())
     }
 }
+
+private fun successfulOrphanCleanupReport(): AttachmentOrphanCleanupReport =
+    AttachmentOrphanCleanupReport(
+        retainedReferenced = 0,
+        deletedOrphans = 0,
+        deletedPendingFiles = 0,
+        restoredDeletingFiles = 0,
+        deletedDeletingFiles = 0,
+        deletingConflicts = 0,
+        failedDeletingOperations = 0,
+        failedDeletes = 0,
+        ignoredUnrecognizedFiles = 0,
+        scanFailed = false,
+    )
 
 private fun successfulClearReport(): SensitiveDataClearReport = SensitiveDataClearReport(
     authorizationAccepted = true,

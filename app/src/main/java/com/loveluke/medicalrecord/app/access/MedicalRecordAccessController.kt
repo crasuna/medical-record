@@ -2,6 +2,7 @@ package com.loveluke.medicalrecord.app.access
 
 import com.loveluke.medicalrecord.app.di.DatabaseFailClosedException
 import com.loveluke.medicalrecord.app.di.DatabaseOpenFailure
+import com.loveluke.medicalrecord.app.storage.CiphertextMaintenanceResult
 import com.loveluke.medicalrecord.app.storage.LocalStorageMaintenance
 import com.loveluke.medicalrecord.app.storage.LocalStorageMaintenanceGateway
 import com.loveluke.medicalrecord.core.attachment.AttachmentStoragePaths
@@ -188,8 +189,12 @@ class MedicalRecordAccessController internal constructor(
             // This may walk the full encrypted attachment tree. It deliberately runs after the
             // bounded security barrier and short database mutex are released, so a cold receiver
             // can use the verified database without waiting for the orphan scan.
-            localStorageMaintenance.removeUnreferencedCiphertext()
-            MedicalRecordAccessState.Ready(patient.id)
+            when (localStorageMaintenance.removeUnreferencedCiphertext()) {
+                is CiphertextMaintenanceResult.Complete -> MedicalRecordAccessState.Ready(patient.id)
+                is CiphertextMaintenanceResult.Incomplete -> {
+                    MedicalRecordAccessState.Locked(MedicalRecordLockReason.LocalStorageUnavailable)
+                }
+            }
         } catch (failure: CancellationException) {
             locked(MedicalRecordLockReason.LocalStorageUnavailable)
             throw failure
