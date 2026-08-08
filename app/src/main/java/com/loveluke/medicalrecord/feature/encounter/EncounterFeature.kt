@@ -122,7 +122,10 @@ class EncounterListViewModel @Inject constructor(
             try {
                 val patient = patientRepository.ensureDefaultPatient()
                 encounterRepository.observeEncounters(patient.id).collect { encounters ->
-                    _uiState.value = EncounterListUiState(encounters = encounters)
+                    _uiState.value = EncounterListUiState(
+                        isLoading = false,
+                        encounters = encounters,
+                    )
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled

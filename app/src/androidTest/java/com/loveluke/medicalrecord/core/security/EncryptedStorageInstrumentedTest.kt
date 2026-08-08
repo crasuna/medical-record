@@ -10,6 +10,8 @@ import com.loveluke.medicalrecord.core.database.AppDatabase
 import java.io.File
 import java.io.FileInputStream
 import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -40,6 +42,44 @@ class EncryptedStorageInstrumentedTest {
             assertNotNull(reopened)
             assertNull(reopened?.encoded)
         } finally {
+            provider.delete(namespace.wrappingKeyAlias)
+        }
+    }
+
+    @Test
+    fun keystoreWrappingKeyEncryptsAndDecryptsEnvelope() {
+        val namespace = testNamespace()
+        val provider = AndroidKeystoreWrappingKeyProvider()
+        val codec = KeyEnvelopeCodec()
+        val expected = ByteArray(32) { index -> (index + 1).toByte() }
+        val material = SecretBytes.copyOf(expected)
+
+        try {
+            val wrappingKey = provider.create(namespace.wrappingKeyAlias)
+            val encoded = try {
+                codec.encode(
+                    purpose = SecureMaterialPurpose.ATTACHMENT_MASTER_KEY,
+                    material = material,
+                    wrappingKey = wrappingKey,
+                )
+            } finally {
+                material.close()
+            }
+            val decoded = codec.decode(
+                expectedPurpose = SecureMaterialPurpose.ATTACHMENT_MASTER_KEY,
+                encoded = encoded,
+                wrappingKey = wrappingKey,
+            )
+
+            assertTrue(decoded is EnvelopeDecodeResult.Success)
+            decoded as EnvelopeDecodeResult.Success
+            try {
+                decoded.secret.use { actual -> assertArrayEquals(expected, actual) }
+            } finally {
+                decoded.secret.close()
+            }
+        } finally {
+            material.close()
             provider.delete(namespace.wrappingKeyAlias)
         }
     }
@@ -80,14 +120,24 @@ class EncryptedStorageInstrumentedTest {
                 "CREATE TABLE IF NOT EXISTS instrumented_transaction " +
                     "(id INTEGER PRIMARY KEY, marker INTEGER NOT NULL)",
             )
-            sqlite.beginTransaction()
+            sqlite.execSQL("INSERT INTO instrumented_transaction(marker) VALUES (17)")
+            val readerExecutor = Executors.newSingleThreadExecutor()
             try {
-                sqlite.execSQL("INSERT INTO instrumented_transaction(marker) VALUES (17)")
-                sqlite.setTransactionSuccessful()
+                sqlite.beginTransaction()
+                try {
+                    sqlite.execSQL("INSERT INTO instrumented_transaction(marker) VALUES (23)")
+                    val concurrentlyVisibleRows = readerExecutor.submit<Int> {
+                        sqlite.scalarInt("SELECT COUNT(*) FROM instrumented_transaction")
+                    }.get(5, TimeUnit.SECONDS)
+                    assertEquals(1, concurrentlyVisibleRows)
+                    sqlite.setTransactionSuccessful()
+                } finally {
+                    sqlite.endTransaction()
+                }
             } finally {
-                sqlite.endTransaction()
+                readerExecutor.shutdownNow()
             }
-            assertEquals(1, sqlite.scalarInt("SELECT COUNT(*) FROM instrumented_transaction"))
+            assertEquals(2, sqlite.scalarInt("SELECT COUNT(*) FROM instrumented_transaction"))
             database.close()
             database = null
 
@@ -99,7 +149,7 @@ class EncryptedStorageInstrumentedTest {
             assertFalse(reopenResolution.newlyProvisioned)
             database = openDatabase(databaseName, reopenResolution)
             assertEquals(
-                1,
+                2,
                 database.openHelper.writableDatabase.scalarInt(
                     "SELECT COUNT(*) FROM instrumented_transaction",
                 ),
@@ -131,7 +181,7 @@ class EncryptedStorageInstrumentedTest {
                 finalResolution as SqlCipherFactoryResolution.Ready,
             )
             assertEquals(
-                1,
+                2,
                 database.openHelper.writableDatabase.scalarInt(
                     "SELECT COUNT(*) FROM instrumented_transaction",
                 ),

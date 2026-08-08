@@ -26,6 +26,20 @@ class EncounterViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
+    fun emptyListEmissionStopsLoading() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = EncounterListViewModel(
+                FakePatientRepository(),
+                FakeEncounterRepository(initialEncounters = emptyList()),
+            )
+
+            runCurrent()
+
+            assertFalse(viewModel.uiState.value.isLoading)
+            assertTrue(viewModel.uiState.value.encounters.isEmpty())
+        }
+
+    @Test
     fun deleteRequiresConfirmationAndEmitsDeletedOnlyAfterRepositorySuccess() =
         runTest(mainDispatcherRule.dispatcher) {
             val encounter = encounter()

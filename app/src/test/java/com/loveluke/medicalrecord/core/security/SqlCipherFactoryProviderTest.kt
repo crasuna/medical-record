@@ -66,7 +66,7 @@ class SqlCipherFactoryProviderTest {
     }
 
     @Test
-    fun `provider closes source secret and clears factory copy after first open`() {
+    fun `provider closes source secret and retains factory copy until helper closes`() {
         val passphrase = ByteArray(32) { index -> (index + 1).toByte() }
         val sourceSecret = SecretBytes.copyOf(passphrase)
         lateinit var factoryOwnedPassphrase: ByteArray
@@ -93,7 +93,38 @@ class SqlCipherFactoryProviderTest {
         val helper = result.factory.create(configuration())
         helper.writableDatabase
 
+        assertArrayEquals(passphrase, factoryOwnedPassphrase)
+
+        helper.close()
+
         assertArrayEquals(ByteArray(passphrase.size), factoryOwnedPassphrase)
+    }
+
+    @Test
+    fun `failed database open clears factory copy`() {
+        val sourceSecret = SecretBytes.copyOf(ByteArray(32) { 9 })
+        lateinit var factoryOwnedPassphrase: ByteArray
+        val expectedFailure = IllegalStateException("open failed")
+        val provider = SqlCipherFactoryProvider.forTesting(
+            passphraseResolver = { SecureMaterialResolution.Available(sourceSecret) },
+            libraryLoader = {},
+            factoryBuilder = { received ->
+                factoryOwnedPassphrase = received
+                SupportSQLiteOpenHelper.Factory {
+                    FakeOpenHelper(
+                        database = fakeDatabase(),
+                        openFailure = expectedFailure,
+                    )
+                }
+            },
+        )
+        val result = provider.create(File("medical-record.db")) as SqlCipherFactoryResolution.Ready
+        val helper = result.factory.create(configuration())
+
+        assertEquals(expectedFailure, assertThrows(IllegalStateException::class.java) {
+            helper.writableDatabase
+        })
+        assertArrayEquals(ByteArray(32), factoryOwnedPassphrase)
     }
 
     @Test
@@ -156,16 +187,17 @@ class SqlCipherFactoryProviderTest {
 
 private class FakeOpenHelper(
     private val database: SupportSQLiteDatabase,
+    private val openFailure: RuntimeException? = null,
 ) : SupportSQLiteOpenHelper {
     override val databaseName: String = "factory-test.db"
 
     override fun setWriteAheadLoggingEnabled(enabled: Boolean) = Unit
 
     override val writableDatabase: SupportSQLiteDatabase
-        get() = database
+        get() = openFailure?.let { throw it } ?: database
 
     override val readableDatabase: SupportSQLiteDatabase
-        get() = database
+        get() = openFailure?.let { throw it } ?: database
 
     override fun close() = Unit
 }

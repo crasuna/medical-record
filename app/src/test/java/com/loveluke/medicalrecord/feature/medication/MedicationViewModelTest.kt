@@ -25,6 +25,20 @@ class MedicationViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
+    fun emptyListEmissionStopsLoading() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = MedicationListViewModel(
+                FakePatientRepository(),
+                FakeMedicationRepository(initialMedications = emptyList()),
+            )
+
+            runCurrent()
+
+            assertFalse(viewModel.uiState.value.isLoading)
+            assertTrue(viewModel.uiState.value.medications.isEmpty())
+        }
+
+    @Test
     fun listStartsCurrentAndRequeriesWhenUserChangesFilter() =
         runTest(mainDispatcherRule.dispatcher) {
             val medication = medication()

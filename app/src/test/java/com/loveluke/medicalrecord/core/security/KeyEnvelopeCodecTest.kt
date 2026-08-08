@@ -4,12 +4,11 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
-import java.security.SecureRandom
 import javax.crypto.spec.SecretKeySpec
 
 class KeyEnvelopeCodecTest {
     private val wrappingKey = SecretKeySpec(ByteArray(32) { index -> (index + 1).toByte() }, "AES")
-    private val codec = KeyEnvelopeCodec(SecureRandom.getInstance("SHA1PRNG").apply { setSeed(42L) })
+    private val codec = KeyEnvelopeCodec()
 
     @Test
     fun `database passphrase round trips and decoded secret can be destroyed`() {

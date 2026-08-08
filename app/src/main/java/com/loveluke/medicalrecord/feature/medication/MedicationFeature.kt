@@ -154,7 +154,11 @@ class MedicationListViewModel @Inject constructor(
             try {
                 val patient = patientRepository.ensureDefaultPatient()
                 medicationRepository.observeMedications(patient.id, filter, todayProvider()).collect { medications ->
-                    _uiState.value = MedicationListUiState(filter = filter, medications = medications)
+                    _uiState.value = MedicationListUiState(
+                        isLoading = false,
+                        filter = filter,
+                        medications = medications,
+                    )
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled

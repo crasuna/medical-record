@@ -5,7 +5,6 @@ import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.security.GeneralSecurityException
-import java.security.SecureRandom
 import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
@@ -33,19 +32,21 @@ sealed interface EnvelopeDecodeResult {
 }
 
 /** A compact authenticated envelope. No secret metadata or user content is encoded. */
-class KeyEnvelopeCodec(
-    private val secureRandom: SecureRandom = SecureRandom(),
-) {
+class KeyEnvelopeCodec {
     fun encode(
         purpose: SecureMaterialPurpose,
         material: SecretBytes,
         wrappingKey: SecretKey,
     ): ByteArray {
         require(material.size == purpose.materialSizeBytes) { "Unexpected secret material size." }
-        val nonce = ByteArray(NONCE_SIZE_BYTES).also(secureRandom::nextBytes)
         val cipher = Cipher.getInstance(TRANSFORMATION).apply {
-            init(Cipher.ENCRYPT_MODE, wrappingKey, GCMParameterSpec(TAG_SIZE_BITS, nonce))
+            init(Cipher.ENCRYPT_MODE, wrappingKey)
             updateAAD(aadFor(purpose))
+        }
+        val nonce = cipher.iv
+            ?: throw GeneralSecurityException("AES-GCM encryption did not provide a nonce.")
+        if (nonce.size != NONCE_SIZE_BYTES) {
+            throw GeneralSecurityException("Unexpected AES-GCM nonce size.")
         }
         val encrypted = material.use { cipher.doFinal(it) }
 

@@ -21,7 +21,7 @@ sealed interface SqlCipherFactoryResolution {
  * Resolves the database passphrase and constructs the only permitted Room open-helper factory.
  *
  * The envelope-owned [SecretBytes] is closed immediately. The one copy retained by SQLCipher is
- * erased after the first database-open attempt, matching the one-shot lifetime expected by Room.
+ * erased when its open helper closes, or immediately if helper creation or database opening fails.
  */
 class SqlCipherFactoryProvider private constructor(
     private val passphraseResolver: (File) -> SecureMaterialResolution,
@@ -116,8 +116,9 @@ class SqlCipherFactoryProvider private constructor(
 }
 
 /**
- * SQLCipher 4.17's SupportOpenHelperFactory retains the caller's byte array. This wrapper ensures
- * that retained array is erased after the first open attempt and prevents unsafe factory reuse.
+ * SQLCipher 4.17's SupportOpenHelperFactory and WAL connection pool retain the caller's byte array
+ * because later connections must be keyed independently. This wrapper keeps that array only for
+ * the helper lifecycle, erases it on close or failed open, and prevents unsafe factory reuse.
  */
 private class PassphraseClearingOpenHelperFactory(
     private val delegate: SupportSQLiteOpenHelper.Factory,
@@ -153,10 +154,10 @@ private class PassphraseClearingOpenHelper(
     }
 
     override val writableDatabase: SupportSQLiteDatabase
-        get() = openOnce { delegate.writableDatabase }
+        get() = openSafely { delegate.writableDatabase }
 
     override val readableDatabase: SupportSQLiteDatabase
-        get() = openOnce { delegate.readableDatabase }
+        get() = openSafely { delegate.readableDatabase }
 
     override fun close() {
         try {
@@ -166,10 +167,11 @@ private class PassphraseClearingOpenHelper(
         }
     }
 
-    private inline fun <T> openOnce(block: () -> T): T = try {
+    private inline fun <T> openSafely(block: () -> T): T = try {
         block()
-    } finally {
+    } catch (error: Throwable) {
         clearPassphrase()
+        throw error
     }
 
     private fun clearPassphrase() {
