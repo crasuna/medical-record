@@ -39,7 +39,9 @@ jobs:
       - name: Ensure Android SDK 37
         shell: bash
         run: |
-          sdkmanager \
+          sdkmanager="${ANDROID_HOME:?ANDROID_HOME is not set}/cmdline-tools/latest/bin/sdkmanager"
+          "${sdkmanager}" \
+            --sdk_root="${ANDROID_HOME}" \
             "platform-tools" \
             "platforms;android-37.0" \
             "build-tools;37.0.0"
