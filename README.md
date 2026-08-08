@@ -133,9 +133,13 @@ Run instrumentation tests when a device is available:
 .\gradlew.bat connectedDebugAndroidTest --warning-mode=all
 ```
 
-Instrumentation covers Android-specific Room/SQLCipher/Keystore behavior and must be executed on
-real target configurations before release, including API 26, the latest API, and a 16 KiB page-size
-device. A successful `compileDebugAndroidTestKotlin` only proves those tests compile.
+Instrumentation covers Android-specific Room/SQLCipher/Keystore behavior. By default, the device
+gate covers one selected online device or emulator. Passing it requires the instrumentation suite,
+debug installation and cold start, core navigation smoke checks, and no new app crash or ANR. A
+successful `compileDebugAndroidTestKotlin` only proves those tests compile.
+
+The broader compatibility matrix is non-blocking and is evaluated or reported only when explicitly
+requested. See the authoritative [device acceptance policy](PROJECT_MEMORY.md#测试与设备验收).
 
 ## Run the debug app
 

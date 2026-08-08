@@ -20,5 +20,6 @@ does not use `ListDetailPaneScaffold`.
 
 - Phone and wide-window navigation share one back stack and destination model.
 - Package boundaries remain visible without empty Gradle modules or speculative abstractions.
-- The custom scene must be covered by layout/metadata tests and device checks, including foldable
-  partitions and resizable desktop windows.
+- The custom scene remains covered by layout and metadata tests. Foldable partitions and resizable
+  desktop windows follow the non-blocking compatibility checklist in `PROJECT_MEMORY.md` and receive
+  device checks only when explicitly requested.

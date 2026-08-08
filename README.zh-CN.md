@@ -126,9 +126,13 @@ medium/expanded 窗口使用 rail。就诊与用药路由通过稳定版自定�
 .\gradlew.bat connectedDebugAndroidTest --warning-mode=all
 ```
 
-instrumentation 测试覆盖 Android 特有的 Room、SQLCipher 和 Keystore 行为。正式发布前必须在
-真实目标环境执行，包括 API 26、最新 API 和 16 KiB page-size 设备。仅
-`compileDebugAndroidTestKotlin` 成功只代表这些测试可以编译，不代表设备门禁已通过。
+instrumentation 测试覆盖 Android 特有的 Room、SQLCipher 和 Keystore 行为。默认设备门禁只覆盖
+一个当前选定的在线设备或模拟器；通过门禁还要求 debug 安装与冷启动、核心导航烟雾检查，以及没有
+新增应用崩溃或 ANR。仅 `compileDebugAndroidTestKotlin` 成功只代表这些测试可以编译，不代表设备
+门禁已通过。
+
+完整兼容性矩阵是非阻塞清单，只在用户明确要求时执行或汇报。权威规则见
+[设备验收策略](PROJECT_MEMORY.md#测试与设备验收)。
 
 ## 运行 debug 应用
 

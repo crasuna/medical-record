@@ -145,19 +145,43 @@ AGP 9.3.1 + KGP 2.4.10 是可配置组合，但不宣称处于 JetBrains fully-s
   `MEDICAL_RECORD_KEY_ALIAS`、`MEDICAL_RECORD_KEY_PASSWORD`。必须 0 个或 4 个；部分配置直接失败。
 - Keystore、`.jks` 和密码不得进入 Git；不在日常开发中创建长期正式签名密钥。
 
-## 测试与发布门禁
+## 测试与设备验收
 
 JVM 测试覆盖 Repository、关键 ViewModel、Room 约束、密钥 envelope、附件加密/篡改/清理、提醒、
 Navigation scene 和隐私行为。Android instrumentation 覆盖真实 Room + SQLCipher 建库/重开/错误
 密钥/WAL/事务与 Android Keystore 行为。
 
-发布前必须重新执行完整 Gradle gate，并在设备上覆盖 API 26、最新 API、16 KiB page size、手机、
-折叠屏、平板/桌面窗口、浅深色、英中、大字体、权限拒绝/恢复、重启、时区变化、最近任务遮罩，
-以及相机/Photo Picker/SAF。若本机没有设备，必须明确写“instrumentation 已编译但未执行”，不能
-把编译成功描述为设备门禁通过。
+### 当前设备门禁
+
+除非用户明确扩大范围，默认设备端验收只覆盖一个当前选定、已启动且 ADB 状态为 `device` 的物理
+设备或模拟器。恰好一个设备在线时直接使用；多个设备在线时先由用户选定，不默认把所有设备纳入
+门禁；没有在线设备时写“设备测试未执行”，不能用 instrumentation 编译成功替代设备通过，也不能
+把未执行写成测试失败。
+
+当前设备门禁只有在以下条件全部满足时才通过：
+
+- `connectedDebugAndroidTest` 已在选定设备实际执行，所有发现的测试均通过，且 `failures=0`、
+  `errors=0`、`skipped=0`。
+- debug APK 安装成功，`MainActivity` 冷启动成功。
+- Home、Encounters、Medications 可以完成往返导航；页面标题、主要操作以及空状态或已有数据状态
+  正常，验收过程不创建或删除业务数据。
+- 验收窗口内没有新增应用崩溃、`FATAL EXCEPTION` 或 ANR。
+
+验收报告记录设备 serial 或 AVD、API、ABI、page size、分辨率/密度和 instrumentation 报告位置。
+满足上述条件时写“当前设备端验收已通过”；该结论只覆盖选定设备，不代表其他 Android 配置已经
+验证。
+
+### 非阻塞兼容性清单
+
+API 26、最新 API、16 KiB page size、手机、折叠屏、平板/桌面窗口、浅深色、英中、大字体、权限
+拒绝/恢复、重启、时区变化、最近任务遮罩，以及相机、Photo Picker 和 SAF 属于按需执行的兼容性
+清单，不是默认设备门禁。
+
+除非用户明确要求兼容矩阵、跨设备兼容性或其中某个配置，代理不执行、不展开，也不把未覆盖项写入
+验收结果、未解决问题、警告或发布阻塞项。按要求执行矩阵检查时，应单独报告实际覆盖情况；矩阵未
+执行或部分执行不改变此前当前设备门禁的通过状态。
 
 ## 维护规则
 
 - 本文件记录当前真实状态和长期约束，不是提交日志。
 - 功能范围、架构边界、数据模型/schema、安全/权限、后台行为、国际化或发布策略发生变化时同步更新。
-- 未在真实设备验证的行为不得写成已经通过设备门禁。
