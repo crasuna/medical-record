@@ -15,6 +15,8 @@ import com.loveluke.medicalrecord.core.model.MedicationWithReminders
 import com.loveluke.medicalrecord.core.model.PatientProfile
 import com.loveluke.medicalrecord.core.model.Reminder
 import com.loveluke.medicalrecord.core.model.ReminderDraft
+import com.loveluke.medicalrecord.core.time.ClockMedicalRecordTimeSource
+import com.loveluke.medicalrecord.core.time.MedicalRecordTimeSource
 import java.time.Clock
 import java.time.LocalDate
 import java.util.UUID
@@ -28,13 +30,26 @@ import kotlinx.coroutines.flow.map
 @Singleton
 class RoomMedicalRecordRepository internal constructor(
     private val database: AppDatabase,
-    private val clock: Clock = Clock.systemUTC(),
+    private val timeSource: MedicalRecordTimeSource,
     private val idGenerator: () -> String = { UUID.randomUUID().toString() },
 ) : PatientRepository, EncounterRepository, MedicationRepository, HomeRepository {
-    @Inject
-    constructor(database: AppDatabase) : this(
+    internal constructor(
+        database: AppDatabase,
+        clock: Clock = Clock.systemUTC(),
+        idGenerator: () -> String = { UUID.randomUUID().toString() },
+    ) : this(
         database = database,
-        clock = Clock.systemUTC(),
+        timeSource = ClockMedicalRecordTimeSource(clock),
+        idGenerator = idGenerator,
+    )
+
+    @Inject
+    constructor(
+        database: AppDatabase,
+        timeSource: MedicalRecordTimeSource,
+    ) : this(
+        database = database,
+        timeSource = timeSource,
         idGenerator = { UUID.randomUUID().toString() },
     )
 
@@ -45,7 +60,7 @@ class RoomMedicalRecordRepository internal constructor(
 
     override suspend fun ensureDefaultPatient(): PatientProfile = database.withTransaction {
         patientDao.getDefault()?.let { return@withTransaction it.toModel() }
-        val now = clock.instant()
+        val now = timeSource.instant()
         val generatedPatientId = idGenerator().requiredUuid("generated patient id")
         patientDao.insertIfAbsent(
             PatientProfileEntity(
@@ -176,7 +191,7 @@ class RoomMedicalRecordRepository internal constructor(
             normalizedMedication.id,
         )
 
-        val now = clock.instant()
+        val now = timeSource.instant()
         val reminderEntities = normalizedReminders.map { draft ->
             val existing = existingByTime[draft.timeMinutesOfDay]
             ReminderEntity(

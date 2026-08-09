@@ -25,9 +25,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
@@ -37,11 +39,13 @@ import androidx.navigation3.ui.NavDisplay
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import com.loveluke.medicalrecord.R
+import com.loveluke.medicalrecord.app.testing.MedicalRecordTestTags
 import com.loveluke.medicalrecord.feature.encounter.AttachmentPreviewRoute
 import com.loveluke.medicalrecord.feature.encounter.EncounterDetailRoute
 import com.loveluke.medicalrecord.feature.encounter.EncounterEditorRoute
 import com.loveluke.medicalrecord.feature.encounter.EncounterListRoute
 import com.loveluke.medicalrecord.feature.home.HomeRoute
+import com.loveluke.medicalrecord.feature.home.HomeViewModel
 import com.loveluke.medicalrecord.feature.medication.MedicationDetailRoute
 import com.loveluke.medicalrecord.feature.medication.MedicationEditorRoute
 import com.loveluke.medicalrecord.feature.medication.MedicationListRoute
@@ -55,6 +59,7 @@ fun MedicalRecordApp(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val homeViewModel: HomeViewModel = hiltViewModel()
     val verticalHinge = rememberSeparatingVerticalHinge(context)
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val isWide = maxWidth >= 600.dp
@@ -116,6 +121,7 @@ fun MedicalRecordApp(
                             },
                             onOpenEncounters = { topLevel = TopLevelDestination.ENCOUNTERS },
                             onOpenMedications = { topLevel = TopLevelDestination.MEDICATIONS },
+                            viewModel = homeViewModel,
                         )
                     }
                     entry<EncounterListDestination>(
@@ -200,18 +206,21 @@ fun MedicalRecordApp(
                     item(
                         selected = topLevel == TopLevelDestination.HOME,
                         onClick = { topLevel = TopLevelDestination.HOME },
+                        modifier = Modifier.testTag(MedicalRecordTestTags.NAV_HOME),
                         icon = { Icon(Icons.Outlined.Home, contentDescription = null) },
                         label = { Text(stringResource(R.string.nav_home)) },
                     )
                     item(
                         selected = topLevel == TopLevelDestination.ENCOUNTERS,
                         onClick = { topLevel = TopLevelDestination.ENCOUNTERS },
+                        modifier = Modifier.testTag(MedicalRecordTestTags.NAV_ENCOUNTERS),
                         icon = { Icon(Icons.AutoMirrored.Outlined.EventNote, contentDescription = null) },
                         label = { Text(stringResource(R.string.nav_encounters)) },
                     )
                     item(
                         selected = topLevel == TopLevelDestination.MEDICATIONS,
                         onClick = { topLevel = TopLevelDestination.MEDICATIONS },
+                        modifier = Modifier.testTag(MedicalRecordTestTags.NAV_MEDICATIONS),
                         icon = { Icon(Icons.Outlined.Medication, contentDescription = null) },
                         label = { Text(stringResource(R.string.nav_medications)) },
                     )

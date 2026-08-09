@@ -30,11 +30,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.loveluke.medicalrecord.R
+import com.loveluke.medicalrecord.app.testing.MedicalRecordTestTags
 import com.loveluke.medicalrecord.core.attachment.AttachmentServiceFailure
 
 const val AttachmentBatchLimit = 10
@@ -153,7 +155,9 @@ fun AttachmentPickerRow(
         }
         OutlinedButton(
             onClick = { pdfLauncher.launch(arrayOf("application/pdf")) },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(MedicalRecordTestTags.ATTACHMENT_SAF_PDF),
             enabled = uiState.controlsEnabled,
         ) {
             Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
@@ -191,7 +195,11 @@ private fun CameraButton(
     onClick: () -> Unit,
     modifier: Modifier,
 ) {
-    OutlinedButton(onClick = onClick, modifier = modifier, enabled = enabled) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.testTag(MedicalRecordTestTags.ATTACHMENT_CAMERA),
+        enabled = enabled,
+    ) {
         Icon(Icons.Outlined.AddAPhoto, contentDescription = null)
         Text(stringResource(R.string.attachment_add_photo), Modifier.padding(start = 6.dp))
     }
@@ -203,7 +211,11 @@ private fun ImagePickerButton(
     onClick: () -> Unit,
     modifier: Modifier,
 ) {
-    OutlinedButton(onClick = onClick, modifier = modifier, enabled = enabled) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.testTag(MedicalRecordTestTags.ATTACHMENT_PHOTO_PICKER),
+        enabled = enabled,
+    ) {
         Icon(Icons.Outlined.Image, contentDescription = null)
         Text(stringResource(R.string.attachment_import_images), Modifier.padding(start = 6.dp))
     }

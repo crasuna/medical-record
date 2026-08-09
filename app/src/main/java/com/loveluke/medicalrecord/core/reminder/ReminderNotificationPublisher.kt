@@ -32,7 +32,6 @@ class ReminderNotificationPublisher(
             NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
             description = applicationContext.getString(R.string.reminder_channel_description)
-            lockscreenVisibility = NotificationCompat.VISIBILITY_PRIVATE
         }
         applicationContext.getSystemService(NotificationManager::class.java)
             .createNotificationChannel(channel)

@@ -12,6 +12,8 @@ import com.loveluke.medicalrecord.core.model.EncounterDetails
 import com.loveluke.medicalrecord.core.security.SecureMaterialFailure
 import com.loveluke.medicalrecord.core.security.SecureMaterialManager
 import com.loveluke.medicalrecord.core.security.SecureMaterialResolution
+import com.loveluke.medicalrecord.core.time.MedicalRecordTimeSource
+import com.loveluke.medicalrecord.core.time.asClock
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.FileInputStream
@@ -307,6 +309,7 @@ class DefaultEncryptedAttachmentService internal constructor(
         secureMaterialManager: SecureMaterialManager,
         storagePaths: AttachmentStoragePaths,
         temporaryPlaintextRegistry: TemporaryPlaintextRegistry,
+        timeSource: MedicalRecordTimeSource,
     ) : this(
         encounterRepository = encounterRepository,
         secureMaterialManager = secureMaterialManager,
@@ -335,7 +338,7 @@ class DefaultEncryptedAttachmentService internal constructor(
         },
         encryptedFileDeleter = EncryptedFileDeleter(File::delete),
         deletionTransaction = AttachmentDeletionTransaction(storagePaths),
-        clock = Clock.systemUTC(),
+        clock = timeSource.asClock(),
         ioDispatcher = Dispatchers.IO,
     )
 

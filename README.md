@@ -118,28 +118,53 @@ From the repository root:
 
 ```powershell
 .\gradlew.bat help --warning-mode=all --configuration-cache
-.\gradlew.bat help --warning-mode=all --configuration-cache
-.\gradlew.bat testDebugUnitTest --warning-mode=all
-.\gradlew.bat compileDebugAndroidTestKotlin --warning-mode=all
-.\gradlew.bat lintDebug --warning-mode=all
-.\gradlew.bat assembleDebug --warning-mode=all
-.\gradlew.bat assembleRelease --warning-mode=all
-.\gradlew.bat bundleRelease --warning-mode=all
+.\gradlew.bat :app:testE2eUnitTest --warning-mode=all --console=plain
+.\gradlew.bat :app:compileE2eAndroidTestKotlin --warning-mode=all --console=plain
+.\gradlew.bat :app:lintDebug :app:lintE2e --warning-mode=all --console=plain
+.\gradlew.bat :app:assembleDebug :app:assembleE2e :app:assembleRelease --warning-mode=all --console=plain
+.\gradlew.bat :app:bundleRelease --warning-mode=all --console=plain
 ```
 
-Run instrumentation tests when a device is available:
+The default blocking device gate is the complete 12-test `@CoreJourney` group on one selected
+online device or emulator. Set `ANDROID_SERIAL` when more than one device is online; it may be
+omitted when exactly one device is in the ADB `device` state:
 
 ```powershell
-.\gradlew.bat connectedDebugAndroidTest --warning-mode=all
+$env:ANDROID_SERIAL = "<adb-serial>"
+
+.\gradlew.bat `
+  :app:connectedE2eAndroidTest `
+  :app:verifyAndArchiveCoreJourney `
+  "-Pandroid.testInstrumentationRunnerArguments.annotation=com.loveluke.medicalrecord.test.CoreJourney" `
+  --warning-mode=all `
+  --console=plain
 ```
 
-Instrumentation covers Android-specific Room/SQLCipher/Keystore behavior. By default, the device
-gate covers one selected online device or emulator. Passing it requires the instrumentation suite,
-debug installation and cold start, core navigation smoke checks, and no new app crash or ANR. A
-successful `compileDebugAndroidTestKotlin` only proves those tests compile.
+The two `@SystemInteraction` tests cover the real system Photo Picker and notification shade. They
+are non-blocking and run only when explicitly requested:
+
+```powershell
+$env:ANDROID_SERIAL = "<adb-serial>"
+
+.\gradlew.bat `
+  :app:connectedE2eAndroidTest `
+  :app:verifyAndArchiveSystemInteraction `
+  "-Pandroid.testInstrumentationRunnerArguments.annotation=com.loveluke.medicalrecord.test.SystemInteraction" `
+  --warning-mode=all `
+  --console=plain
+```
+
+Device acceptance uses the isolated `com.loveluke.medicalrecord.e2e` target and
+`com.loveluke.medicalrecord.e2e.test` test application. Automated assertions are the sole verdict;
+agent-driven manual smoke testing is diagnostic and is not run by default. A successful
+`:app:compileE2eAndroidTestKotlin` only proves that instrumentation compiles, not that device tests
+ran or passed. The verifier requires exact JUnit counts with no failures, errors, or skips and
+archives the report plus per-test evidence under
+`app/build/outputs/androidTest-artifacts/<adb-serial>/<group>/`.
 
 The broader compatibility matrix is non-blocking and is evaluated or reported only when explicitly
-requested. See the authoritative [device acceptance policy](PROJECT_MEMORY.md#测试与设备验收).
+requested. See the [device journey guide](docs/testing/device-journeys.md) for commands and evidence
+layout; [PROJECT_MEMORY.md](PROJECT_MEMORY.md#测试与设备验收) is the authoritative acceptance policy.
 
 ## Run the debug app
 

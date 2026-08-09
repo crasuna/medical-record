@@ -1,5 +1,6 @@
 package com.loveluke.medicalrecord.feature.home
 
+import androidx.lifecycle.SavedStateHandle
 import com.loveluke.medicalrecord.core.model.GlobalSearchResults
 import com.loveluke.medicalrecord.feature.FakeHomeRepository
 import com.loveluke.medicalrecord.feature.FakePatientRepository
@@ -30,6 +31,7 @@ class HomeViewModelTest {
         val viewModel = HomeViewModel(
             patientRepository = FakePatientRepository(),
             homeRepository = FakeHomeRepository(initialOverview = overview),
+            savedStateHandle = SavedStateHandle(),
         )
 
         runCurrent()
@@ -47,7 +49,11 @@ class HomeViewModelTest {
             medications = listOf(medication()),
         )
         val repository = FakeHomeRepository(initialSearchResults = searchResults)
-        val viewModel = HomeViewModel(FakePatientRepository(), repository)
+        val viewModel = HomeViewModel(
+            patientRepository = FakePatientRepository(),
+            homeRepository = repository,
+            savedStateHandle = SavedStateHandle(),
+        )
         runCurrent()
 
         viewModel.onAction(HomeAction.QueryChanged("cli"))
@@ -69,12 +75,52 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun searchQueryAndResultsRestoreWhenTheViewModelIsRecreated() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val savedStateHandle = SavedStateHandle()
+            val searchResults = GlobalSearchResults(
+                query = "clinic",
+                encounters = listOf(encounter()),
+                medications = listOf(medication()),
+            )
+            val first = HomeViewModel(
+                patientRepository = FakePatientRepository(),
+                homeRepository = FakeHomeRepository(initialSearchResults = searchResults),
+                savedStateHandle = savedStateHandle,
+            )
+            runCurrent()
+
+            first.onAction(HomeAction.QueryChanged("clinic"))
+            advanceTimeBy(SEARCH_DEBOUNCE_MILLIS_FOR_TEST)
+            runCurrent()
+
+            val restoredRepository = FakeHomeRepository(initialSearchResults = searchResults)
+            val restored = HomeViewModel(
+                patientRepository = FakePatientRepository(),
+                homeRepository = restoredRepository,
+                savedStateHandle = savedStateHandle,
+            )
+            runCurrent()
+
+            assertEquals("clinic", restored.uiState.value.query)
+            assertTrue(restored.uiState.value.isSearchLoading)
+
+            advanceTimeBy(SEARCH_DEBOUNCE_MILLIS_FOR_TEST)
+            runCurrent()
+
+            assertEquals(listOf("clinic"), restoredRepository.queries)
+            assertEquals(searchResults, restored.uiState.value.searchResults)
+            assertFalse(restored.uiState.value.isSearchLoading)
+        }
+
+    @Test
     fun retryRecoversAfterDefaultPatientLookupError() = runTest(mainDispatcherRule.dispatcher) {
         val patientRepository = FakePatientRepository().apply { failuresRemaining = 1 }
         val overview = homeOverview()
         val viewModel = HomeViewModel(
             patientRepository = patientRepository,
             homeRepository = FakeHomeRepository(initialOverview = overview),
+            savedStateHandle = SavedStateHandle(),
         )
         advanceUntilIdle()
 
@@ -95,9 +141,10 @@ class HomeViewModelTest {
             var today = LocalDate.of(2026, 8, 8)
             val repository = FakeHomeRepository()
             val viewModel = HomeViewModel(
-                FakePatientRepository(),
-                repository,
+                patientRepository = FakePatientRepository(),
+                homeRepository = repository,
                 todayProvider = { today },
+                savedStateHandle = SavedStateHandle(),
             )
             runCurrent()
 
@@ -111,3 +158,5 @@ class HomeViewModelTest {
             )
         }
 }
+
+private const val SEARCH_DEBOUNCE_MILLIS_FOR_TEST = 300L

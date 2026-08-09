@@ -9,6 +9,8 @@ import com.loveluke.medicalrecord.core.reminder.ReminderPlan
 import com.loveluke.medicalrecord.core.reminder.ReminderScheduleStore
 import com.loveluke.medicalrecord.core.reminder.ReminderSchedulingState
 import com.loveluke.medicalrecord.core.reminder.nextOccurrence
+import com.loveluke.medicalrecord.core.time.ClockMedicalRecordTimeSource
+import com.loveluke.medicalrecord.core.time.MedicalRecordTimeSource
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
@@ -17,16 +19,17 @@ import javax.inject.Singleton
 
 /** Room-backed source of truth used by the AlarmManager adapter. */
 @Singleton
-class RoomReminderScheduleStore internal constructor(
+class RoomReminderScheduleStore @Inject internal constructor(
     private val database: AppDatabase,
-    private val clock: Clock = Clock.systemUTC(),
-    private val zoneIdProvider: () -> ZoneId = ZoneId::systemDefault,
+    private val timeSource: MedicalRecordTimeSource,
 ) : ReminderScheduleStore {
-    @Inject
-    constructor(database: AppDatabase) : this(
+    internal constructor(
+        database: AppDatabase,
+        clock: Clock = Clock.systemUTC(),
+        zoneIdProvider: () -> ZoneId = ZoneId::systemDefault,
+    ) : this(
         database = database,
-        clock = Clock.systemUTC(),
-        zoneIdProvider = ZoneId::systemDefault,
+        timeSource = ClockMedicalRecordTimeSource(clock, zoneIdProvider),
     )
 
     override suspend fun findNextOccurrence(
@@ -83,7 +86,7 @@ class RoomReminderScheduleStore internal constructor(
                 reminderId = null,
                 triggerAt = null,
                 precision = null,
-                updatedAt = clock.instant(),
+                updatedAt = timeSource.instant(),
             )
 
             ReminderSchedulingState.NotificationsUnavailable -> ReminderScheduleStateEntity(
@@ -91,7 +94,7 @@ class RoomReminderScheduleStore internal constructor(
                 reminderId = null,
                 triggerAt = null,
                 precision = null,
-                updatedAt = clock.instant(),
+                updatedAt = timeSource.instant(),
             )
 
             is ReminderSchedulingState.Scheduled -> ReminderScheduleStateEntity(
@@ -99,7 +102,7 @@ class RoomReminderScheduleStore internal constructor(
                 reminderId = state.reminderId,
                 triggerAt = state.triggerAt,
                 precision = state.precision.name,
-                updatedAt = clock.instant(),
+                updatedAt = timeSource.instant(),
             )
         }
         database.reminderScheduleDao().upsertState(entity)
@@ -113,7 +116,7 @@ class RoomReminderScheduleStore internal constructor(
         scheduledAt: Instant,
         deliveredAt: Instant,
     ): ReminderDeliveryBatch {
-        val zoneId = zoneIdProvider()
+        val zoneId = timeSource.zoneId()
         val searchFloor = runCatching { scheduledAt.minusNanos(1) }
             .getOrElse { scheduledAt }
         val notifications = database.medicationDao()

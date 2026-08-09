@@ -11,6 +11,8 @@ import com.loveluke.medicalrecord.core.reminder.ReminderRuntime
 import com.loveluke.medicalrecord.core.reminder.ReminderRuntimeHandler
 import com.loveluke.medicalrecord.core.reminder.ReminderScheduleStore
 import com.loveluke.medicalrecord.core.reminder.SystemReminderScheduler
+import com.loveluke.medicalrecord.core.time.MedicalRecordTimeSource
+import com.loveluke.medicalrecord.core.time.asClock
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.Instant
 import javax.inject.Inject
@@ -36,10 +38,16 @@ class ReminderRuntimeCoordinator internal constructor(
         @ApplicationContext context: Context,
         storeProvider: Provider<ReminderScheduleStore>,
         @ApplicationCoroutineScope retryScope: CoroutineScope,
+        timeSource: MedicalRecordTimeSource,
     ) : this(
         handlerFactory = {
             val store = storeProvider.get()
-            val scheduler = SystemReminderScheduler(context, store)
+            val scheduler = SystemReminderScheduler(
+                context = context,
+                store = store,
+                clock = timeSource.asClock(),
+                zoneIdProvider = timeSource::zoneId,
+            )
             val publisher = ReminderNotificationPublisher(context).also {
                 it.createChannel()
             }
@@ -47,6 +55,7 @@ class ReminderRuntimeCoordinator internal constructor(
                 store = store,
                 scheduler = scheduler,
                 notificationPublisher = publisher,
+                clock = timeSource.asClock(),
             )
         },
         retryScope = retryScope,

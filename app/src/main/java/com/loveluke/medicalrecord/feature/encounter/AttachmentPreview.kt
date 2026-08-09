@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
@@ -54,6 +55,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.loveluke.medicalrecord.R
+import com.loveluke.medicalrecord.app.testing.MedicalRecordTestTags
 import com.loveluke.medicalrecord.core.attachment.AttachmentDeleteResult
 import com.loveluke.medicalrecord.core.attachment.AttachmentPreviewHandle
 import com.loveluke.medicalrecord.core.attachment.AttachmentPreviewResult
@@ -301,7 +303,9 @@ fun AttachmentPreviewScreen(
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(MedicalRecordTestTags.SCREEN_ATTACHMENT_PREVIEW),
         topBar = {
             TopAppBar(
                 title = {
@@ -317,7 +321,10 @@ fun AttachmentPreviewScreen(
                 },
                 actions = {
                     if (uiState.attachment != null) {
-                        IconButton(onClick = { onAction(AttachmentPreviewAction.RequestDelete) }) {
+                        IconButton(
+                            onClick = { onAction(AttachmentPreviewAction.RequestDelete) },
+                            modifier = Modifier.testTag(MedicalRecordTestTags.ATTACHMENT_DELETE),
+                        ) {
                             Icon(Icons.Outlined.Delete, stringResource(R.string.delete))
                         }
                     }
@@ -368,7 +375,10 @@ fun AttachmentPreviewScreen(
             title = { Text(stringResource(R.string.attachment_delete_title)) },
             text = { Text(stringResource(R.string.attachment_delete_body)) },
             confirmButton = {
-                Button(onClick = { onAction(AttachmentPreviewAction.ConfirmDelete) }) {
+                Button(
+                    onClick = { onAction(AttachmentPreviewAction.ConfirmDelete) },
+                    modifier = Modifier.testTag(MedicalRecordTestTags.ATTACHMENT_DELETE_CONFIRM),
+                ) {
                     Text(stringResource(R.string.delete))
                 }
             },

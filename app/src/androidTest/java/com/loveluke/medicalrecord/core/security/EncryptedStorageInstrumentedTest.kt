@@ -5,6 +5,8 @@ import android.system.Os
 import android.system.OsConstants
 import androidx.room.RoomDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.loveluke.medicalrecord.test.CoreJourney
+import com.loveluke.medicalrecord.test.CoreJourneyTest
 import androidx.test.platform.app.InstrumentationRegistry
 import com.loveluke.medicalrecord.core.database.AppDatabase
 import java.io.File
@@ -23,7 +25,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class EncryptedStorageInstrumentedTest {
+@CoreJourney
+class EncryptedStorageInstrumentedTest : CoreJourneyTest() {
     private val context: Context
         get() = InstrumentationRegistry.getInstrumentation().targetContext
 

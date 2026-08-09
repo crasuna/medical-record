@@ -40,10 +40,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -51,6 +53,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.loveluke.medicalrecord.R
+import com.loveluke.medicalrecord.app.testing.MedicalRecordTestTags
 import com.loveluke.medicalrecord.core.database.HomeRepository
 import com.loveluke.medicalrecord.core.database.PatientRepository
 import com.loveluke.medicalrecord.core.designsystem.EmptyState
@@ -62,6 +65,8 @@ import com.loveluke.medicalrecord.core.model.Encounter
 import com.loveluke.medicalrecord.core.model.GlobalSearchResults
 import com.loveluke.medicalrecord.core.model.HomeOverview
 import com.loveluke.medicalrecord.core.model.Medication
+import com.loveluke.medicalrecord.core.time.MedicalRecordTimeSource
+import com.loveluke.medicalrecord.core.time.SystemMedicalRecordTimeSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -100,10 +105,18 @@ sealed interface HomeAction {
 class HomeViewModel @Inject constructor(
     private val patientRepository: PatientRepository,
     private val homeRepository: HomeRepository,
+    private val savedStateHandle: SavedStateHandle,
+    timeSource: MedicalRecordTimeSource = SystemMedicalRecordTimeSource,
 ) : ViewModel() {
-    private var todayProvider: () -> LocalDate = LocalDate::now
-    private val query = MutableStateFlow("")
-    private val _uiState = MutableStateFlow(HomeUiState())
+    private var todayProvider: () -> LocalDate = timeSource::today
+    private val restoredQuery: String = savedStateHandle.get<String>(SEARCH_QUERY_KEY).orEmpty()
+    private val query = MutableStateFlow(restoredQuery)
+    private val _uiState = MutableStateFlow(
+        HomeUiState(
+            query = restoredQuery,
+            isSearchLoading = restoredQuery.isNotBlank(),
+        ),
+    )
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
     private var loadJob: Job? = null
 
@@ -114,6 +127,7 @@ class HomeViewModel @Inject constructor(
     fun onAction(action: HomeAction) {
         when (action) {
             is HomeAction.QueryChanged -> {
+                savedStateHandle[SEARCH_QUERY_KEY] = action.query
                 query.value = action.query
                 _uiState.update {
                     it.copy(
@@ -133,7 +147,8 @@ class HomeViewModel @Inject constructor(
         patientRepository: PatientRepository,
         homeRepository: HomeRepository,
         todayProvider: () -> LocalDate,
-    ) : this(patientRepository, homeRepository) {
+        savedStateHandle: SavedStateHandle,
+    ) : this(patientRepository, homeRepository, savedStateHandle) {
         this.todayProvider = todayProvider
     }
 
@@ -207,6 +222,7 @@ class HomeViewModel @Inject constructor(
 }
 
 private const val SEARCH_DEBOUNCE_MILLIS = 300L
+private const val SEARCH_QUERY_KEY = "home.search.query"
 
 @Composable
 fun HomeRoute(
@@ -253,7 +269,9 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(MedicalRecordTestTags.SCREEN_HOME),
         topBar = {
             TopAppBar(title = { Text(stringResource(R.string.home_title)) })
         },
@@ -312,7 +330,9 @@ private fun HomeContent(
             OutlinedTextField(
                 value = uiState.query,
                 onValueChange = { onAction(HomeAction.QueryChanged(it)) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(MedicalRecordTestTags.HOME_SEARCH),
                 label = { Text(stringResource(R.string.search_label)) },
                 placeholder = { Text(stringResource(R.string.search_placeholder)) },
                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
@@ -449,22 +469,42 @@ private fun QuickActions(
     BoxWithConstraints {
         if (maxWidth >= 520.dp) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = onCreateEncounter, modifier = Modifier.weight(1f)) {
+                Button(
+                    onClick = onCreateEncounter,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(MedicalRecordTestTags.HOME_NEW_ENCOUNTER),
+                ) {
                     Icon(Icons.Outlined.Add, contentDescription = null)
                     Text(stringResource(R.string.new_encounter), modifier = Modifier.padding(start = 8.dp))
                 }
-                Button(onClick = onCreateMedication, modifier = Modifier.weight(1f)) {
+                Button(
+                    onClick = onCreateMedication,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(MedicalRecordTestTags.HOME_NEW_MEDICATION),
+                ) {
                     Icon(Icons.Outlined.Add, contentDescription = null)
                     Text(stringResource(R.string.new_medication), modifier = Modifier.padding(start = 8.dp))
                 }
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onCreateEncounter, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onCreateEncounter,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(MedicalRecordTestTags.HOME_NEW_ENCOUNTER),
+                ) {
                     Icon(Icons.Outlined.Add, contentDescription = null)
                     Text(stringResource(R.string.new_encounter), modifier = Modifier.padding(start = 8.dp))
                 }
-                Button(onClick = onCreateMedication, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onCreateMedication,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(MedicalRecordTestTags.HOME_NEW_MEDICATION),
+                ) {
                     Icon(Icons.Outlined.Add, contentDescription = null)
                     Text(stringResource(R.string.new_medication), modifier = Modifier.padding(start = 8.dp))
                 }

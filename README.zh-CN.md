@@ -111,28 +111,50 @@ medium/expanded 窗口使用 rail。就诊与用药路由通过稳定版自定�
 
 ```powershell
 .\gradlew.bat help --warning-mode=all --configuration-cache
-.\gradlew.bat help --warning-mode=all --configuration-cache
-.\gradlew.bat testDebugUnitTest --warning-mode=all
-.\gradlew.bat compileDebugAndroidTestKotlin --warning-mode=all
-.\gradlew.bat lintDebug --warning-mode=all
-.\gradlew.bat assembleDebug --warning-mode=all
-.\gradlew.bat assembleRelease --warning-mode=all
-.\gradlew.bat bundleRelease --warning-mode=all
+.\gradlew.bat :app:testE2eUnitTest --warning-mode=all --console=plain
+.\gradlew.bat :app:compileE2eAndroidTestKotlin --warning-mode=all --console=plain
+.\gradlew.bat :app:lintDebug :app:lintE2e --warning-mode=all --console=plain
+.\gradlew.bat :app:assembleDebug :app:assembleE2e :app:assembleRelease --warning-mode=all --console=plain
+.\gradlew.bat :app:bundleRelease --warning-mode=all --console=plain
 ```
 
-有设备时执行：
+默认阻塞设备门禁是在一个当前选定且在线的设备或模拟器上执行完整的 12 条 `@CoreJourney`。多个
+设备在线时必须设置 `ANDROID_SERIAL`；恰好一个设备处于 ADB `device` 状态时可以省略：
 
 ```powershell
-.\gradlew.bat connectedDebugAndroidTest --warning-mode=all
+$env:ANDROID_SERIAL = "<adb-serial>"
+
+.\gradlew.bat `
+  :app:connectedE2eAndroidTest `
+  :app:verifyAndArchiveCoreJourney `
+  "-Pandroid.testInstrumentationRunnerArguments.annotation=com.loveluke.medicalrecord.test.CoreJourney" `
+  --warning-mode=all `
+  --console=plain
 ```
 
-instrumentation 测试覆盖 Android 特有的 Room、SQLCipher 和 Keystore 行为。默认设备门禁只覆盖
-一个当前选定的在线设备或模拟器；通过门禁还要求 debug 安装与冷启动、核心导航烟雾检查，以及没有
-新增应用崩溃或 ANR。仅 `compileDebugAndroidTestKotlin` 成功只代表这些测试可以编译，不代表设备
-门禁已通过。
+两条 `@SystemInteraction` 覆盖真实系统 Photo Picker 和通知栏，只在明确要求时按需执行，不属于
+默认阻塞门禁：
+
+```powershell
+$env:ANDROID_SERIAL = "<adb-serial>"
+
+.\gradlew.bat `
+  :app:connectedE2eAndroidTest `
+  :app:verifyAndArchiveSystemInteraction `
+  "-Pandroid.testInstrumentationRunnerArguments.annotation=com.loveluke.medicalrecord.test.SystemInteraction" `
+  --warning-mode=all `
+  --console=plain
+```
+
+设备验收使用隔离的目标应用 `com.loveluke.medicalrecord.e2e` 和测试应用
+`com.loveluke.medicalrecord.e2e.test`。自动断言是唯一 verdict；代理手工烟雾仅用于诊断，默认不执行。
+仅 `:app:compileE2eAndroidTestKotlin` 成功只代表 instrumentation 可以编译，不代表设备测试已经执行或
+通过。校验任务要求 JUnit 精确计数且没有失败、错误或跳过，并把报告和逐测试证据归档到
+`app/build/outputs/androidTest-artifacts/<adb-serial>/<group>/`。
 
 完整兼容性矩阵是非阻塞清单，只在用户明确要求时执行或汇报。权威规则见
-[设备验收策略](PROJECT_MEMORY.md#测试与设备验收)。
+[设备用户旅程测试指南](docs/testing/device-journeys.md)；验收策略以
+[PROJECT_MEMORY.md](PROJECT_MEMORY.md#测试与设备验收) 为准。
 
 ## 运行 debug 应用
 

@@ -9,6 +9,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.loveluke.medicalrecord.R
 import com.loveluke.medicalrecord.core.designsystem.MedicalRecordTheme
+import com.loveluke.medicalrecord.test.CoreJourney
+import com.loveluke.medicalrecord.test.CoreJourneyTest
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -16,8 +18,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class AccessRecoveryUiTest {
-    @get:Rule
+@CoreJourney
+class AccessRecoveryUiTest : CoreJourneyTest() {
+    @get:Rule(order = 0)
     val composeRule = createComposeRule()
 
     private val context: Context = ApplicationProvider.getApplicationContext()

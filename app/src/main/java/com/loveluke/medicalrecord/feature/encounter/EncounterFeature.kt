@@ -41,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.loveluke.medicalrecord.R
 import com.loveluke.medicalrecord.app.navigation.LocalDetailBackNavigationVisible
+import com.loveluke.medicalrecord.app.testing.MedicalRecordTestTags
 import com.loveluke.medicalrecord.core.attachment.EncounterDeleteResult
 import com.loveluke.medicalrecord.core.attachment.EncryptedAttachmentService
 import com.loveluke.medicalrecord.core.database.EncounterRepository
@@ -63,6 +65,8 @@ import com.loveluke.medicalrecord.core.designsystem.MedicalRecordThemeTokens
 import com.loveluke.medicalrecord.core.designsystem.ScreenContentPadding
 import com.loveluke.medicalrecord.core.model.Encounter
 import com.loveluke.medicalrecord.core.model.EncounterDetails
+import com.loveluke.medicalrecord.core.time.MedicalRecordTimeSource
+import com.loveluke.medicalrecord.core.time.SystemMedicalRecordTimeSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Instant
 import java.time.LocalDate
@@ -235,7 +239,7 @@ data class EncounterEditorUiState(
     val hasLoadError: Boolean = false,
     val hasSaveError: Boolean = false,
     val encounterId: String? = null,
-    val visitDate: String = LocalDate.now().toString(),
+    val visitDate: String = "",
     val visitTime: String = "",
     val hospital: String = "",
     val department: String = "",
@@ -271,8 +275,9 @@ sealed interface EncounterEditorEvent {
 class EncounterEditorViewModel @Inject constructor(
     private val patientRepository: PatientRepository,
     private val encounterRepository: EncounterRepository,
+    private val timeSource: MedicalRecordTimeSource = SystemMedicalRecordTimeSource,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(EncounterEditorUiState())
+    private val _uiState = MutableStateFlow(newEncounterState())
     val uiState: StateFlow<EncounterEditorUiState> = _uiState.asStateFlow()
     private val _events = MutableSharedFlow<EncounterEditorEvent>(extraBufferCapacity = 1)
     val events: SharedFlow<EncounterEditorEvent> = _events.asSharedFlow()
@@ -284,7 +289,7 @@ class EncounterEditorViewModel @Inject constructor(
         requestedId = encounterId
         if (encounterId == null) {
             original = null
-            _uiState.value = EncounterEditorUiState()
+            _uiState.value = newEncounterState()
             return
         }
         viewModelScope.launch {
@@ -351,7 +356,7 @@ class EncounterEditorViewModel @Inject constructor(
             _uiState.update { it.copy(isSaving = true, hasSaveError = false) }
             try {
                 val patient = patientRepository.ensureDefaultPatient()
-                val now = Instant.now()
+                val now = timeSource.instant()
                 val existing = original
                 val encounter = Encounter(
                     id = existing?.id ?: UUID.randomUUID().toString(),
@@ -378,6 +383,10 @@ class EncounterEditorViewModel @Inject constructor(
             }
         }
     }
+
+    private fun newEncounterState(): EncounterEditorUiState = EncounterEditorUiState(
+        visitDate = timeSource.today().toString(),
+    )
 }
 
 private fun Encounter.toEditorState() = EncounterEditorUiState(
@@ -435,10 +444,15 @@ fun EncounterListScreen(
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(MedicalRecordTestTags.SCREEN_ENCOUNTERS),
         topBar = { TopAppBar(title = { Text(stringResource(R.string.encounters_title)) }) },
         floatingActionButton = {
-            FloatingActionButton(onClick = onCreate) {
+            FloatingActionButton(
+                onClick = onCreate,
+                modifier = Modifier.testTag(MedicalRecordTestTags.ENCOUNTER_NEW),
+            ) {
                 Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.new_encounter))
             }
         },
@@ -558,7 +572,9 @@ fun EncounterDetailScreen(
 ) {
     val showBack = LocalDetailBackNavigationVisible.current
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(MedicalRecordTestTags.SCREEN_ENCOUNTER_DETAIL),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.encounter_details_title)) },
@@ -571,10 +587,16 @@ fun EncounterDetailScreen(
                 },
                 actions = {
                     uiState.details?.encounter?.let { encounter ->
-                        IconButton(onClick = { onEdit(encounter.id) }) {
+                        IconButton(
+                            onClick = { onEdit(encounter.id) },
+                            modifier = Modifier.testTag(MedicalRecordTestTags.ENCOUNTER_EDIT),
+                        ) {
                             Icon(Icons.Outlined.Edit, stringResource(R.string.edit))
                         }
-                        IconButton(onClick = { onAction(EncounterDetailAction.RequestDelete) }) {
+                        IconButton(
+                            onClick = { onAction(EncounterDetailAction.RequestDelete) },
+                            modifier = Modifier.testTag(MedicalRecordTestTags.ENCOUNTER_DELETE),
+                        ) {
                             Icon(Icons.Outlined.Delete, stringResource(R.string.delete))
                         }
                     }
@@ -615,12 +637,18 @@ fun EncounterDetailScreen(
             title = { Text(stringResource(R.string.encounter_delete_title)) },
             text = { Text(stringResource(R.string.encounter_delete_body)) },
             confirmButton = {
-                Button(onClick = { onAction(EncounterDetailAction.ConfirmDelete) }) {
+                Button(
+                    onClick = { onAction(EncounterDetailAction.ConfirmDelete) },
+                    modifier = Modifier.testTag(MedicalRecordTestTags.ENCOUNTER_DELETE_CONFIRM),
+                ) {
                     Text(stringResource(R.string.delete))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { onAction(EncounterDetailAction.DismissDelete) }) {
+                TextButton(
+                    onClick = { onAction(EncounterDetailAction.DismissDelete) },
+                    modifier = Modifier.testTag(MedicalRecordTestTags.ENCOUNTER_DELETE_CANCEL),
+                ) {
                     Text(stringResource(R.string.cancel))
                 }
             },
@@ -642,7 +670,9 @@ private fun EncounterDetailsContent(
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(MedicalRecordTestTags.ENCOUNTER_DETAIL_CONTENT),
         contentPadding = ScreenContentPadding,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -709,9 +739,11 @@ private fun EncounterDetailsContent(
                         )
                     },
                     leadingContent = { Icon(Icons.Outlined.Edit, contentDescription = null) },
-                    modifier = Modifier.clickable {
-                        onOpenAttachment(details.encounter.id, attachment.id)
-                    },
+                    modifier = Modifier
+                        .testTag(MedicalRecordTestTags.ATTACHMENT_PREVIEW)
+                        .clickable {
+                            onOpenAttachment(details.encounter.id, attachment.id)
+                        },
                 )
             }
         }
@@ -777,7 +809,9 @@ fun EncounterEditorScreen(
 ) {
     val focusManager = LocalFocusManager.current
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(MedicalRecordTestTags.SCREEN_ENCOUNTER_EDITOR),
         topBar = {
             TopAppBar(
                 title = {
@@ -807,7 +841,9 @@ fun EncounterEditorScreen(
                 maxWidth = MedicalRecordThemeTokens.formMaxWidth,
             ) {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag(MedicalRecordTestTags.ENCOUNTER_EDITOR_FORM),
                     contentPadding = ScreenContentPadding,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -865,7 +901,9 @@ fun EncounterEditorScreen(
                                     focusManager.clearFocus()
                                     onAction(EncounterEditorAction.Save)
                                 },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag(MedicalRecordTestTags.ENCOUNTER_SAVE),
                                 enabled = !uiState.isSaving,
                             ) {
                                 Text(stringResource(if (uiState.isSaving) R.string.saving else R.string.save))
@@ -892,7 +930,9 @@ private fun FormTextField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(encounterFieldTag(labelRes)),
         label = { Text(stringResource(labelRes)) },
         isError = isError,
         supportingText = if (isError) ({ Text(stringResource(errorRes)) }) else null,
@@ -901,4 +941,17 @@ private fun FormTextField(
         keyboardOptions = KeyboardOptions(imeAction = if (singleLine) ImeAction.Next else ImeAction.Default),
         keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
     )
+}
+
+private fun encounterFieldTag(labelRes: Int): String = when (labelRes) {
+    R.string.encounter_visit_date -> MedicalRecordTestTags.ENCOUNTER_VISIT_DATE
+    R.string.encounter_visit_time -> MedicalRecordTestTags.ENCOUNTER_VISIT_TIME
+    R.string.encounter_hospital -> MedicalRecordTestTags.ENCOUNTER_HOSPITAL
+    R.string.encounter_department -> MedicalRecordTestTags.ENCOUNTER_DEPARTMENT
+    R.string.encounter_doctor -> MedicalRecordTestTags.ENCOUNTER_DOCTOR
+    R.string.encounter_chief_complaint -> MedicalRecordTestTags.ENCOUNTER_CHIEF_COMPLAINT
+    R.string.encounter_diagnosis -> MedicalRecordTestTags.ENCOUNTER_DIAGNOSIS
+    R.string.encounter_disposition -> MedicalRecordTestTags.ENCOUNTER_DISPOSITION
+    R.string.encounter_notes -> MedicalRecordTestTags.ENCOUNTER_NOTES
+    else -> error("Encounter field is missing a stable test tag: $labelRes")
 }

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -53,6 +54,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,6 +68,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.loveluke.medicalrecord.R
 import com.loveluke.medicalrecord.app.navigation.LocalDetailBackNavigationVisible
+import com.loveluke.medicalrecord.app.testing.MedicalRecordTestTags
 import com.loveluke.medicalrecord.core.database.MedicationRepository
 import com.loveluke.medicalrecord.core.database.PatientRepository
 import com.loveluke.medicalrecord.core.designsystem.EmptyState
@@ -80,6 +83,8 @@ import com.loveluke.medicalrecord.core.model.MedicationFilter
 import com.loveluke.medicalrecord.core.model.MedicationWithReminders
 import com.loveluke.medicalrecord.core.model.ReminderDraft
 import com.loveluke.medicalrecord.core.model.courseStatus
+import com.loveluke.medicalrecord.core.time.MedicalRecordTimeSource
+import com.loveluke.medicalrecord.core.time.SystemMedicalRecordTimeSource
 import com.loveluke.medicalrecord.core.reminder.ReminderPermissionGateway
 import com.loveluke.medicalrecord.core.reminder.ReminderPermissionSnapshot
 import com.loveluke.medicalrecord.core.reminder.ReminderNotificationBlockReason
@@ -109,6 +114,7 @@ data class MedicationListUiState(
     val hasError: Boolean = false,
     val filter: MedicationFilter = MedicationFilter.CURRENT,
     val medications: List<Medication> = emptyList(),
+    val today: LocalDate = LocalDate.MIN,
 )
 
 sealed interface MedicationListAction {
@@ -121,8 +127,9 @@ sealed interface MedicationListAction {
 class MedicationListViewModel @Inject constructor(
     private val patientRepository: PatientRepository,
     private val medicationRepository: MedicationRepository,
+    timeSource: MedicalRecordTimeSource = SystemMedicalRecordTimeSource,
 ) : ViewModel() {
-    private var todayProvider: () -> LocalDate = LocalDate::now
+    private var todayProvider: () -> LocalDate = timeSource::today
     private val _uiState = MutableStateFlow(MedicationListUiState())
     val uiState: StateFlow<MedicationListUiState> = _uiState.asStateFlow()
     private var job: Job? = null
@@ -150,14 +157,18 @@ class MedicationListViewModel @Inject constructor(
     private fun observe(filter: MedicationFilter) {
         job?.cancel()
         job = viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, hasError = false, filter = filter) }
+            val today = todayProvider()
+            _uiState.update {
+                it.copy(isLoading = true, hasError = false, filter = filter, today = today)
+            }
             try {
                 val patient = patientRepository.ensureDefaultPatient()
-                medicationRepository.observeMedications(patient.id, filter, todayProvider()).collect { medications ->
+                medicationRepository.observeMedications(patient.id, filter, today).collect { medications ->
                     _uiState.value = MedicationListUiState(
                         isLoading = false,
                         filter = filter,
                         medications = medications,
+                        today = today,
                     )
                 }
             } catch (cancelled: CancellationException) {
@@ -176,6 +187,7 @@ data class MedicationDetailUiState(
     val medication: MedicationWithReminders? = null,
     val showDeleteConfirmation: Boolean = false,
     val isDeleting: Boolean = false,
+    val today: LocalDate = LocalDate.MIN,
 )
 
 sealed interface MedicationDetailAction {
@@ -193,6 +205,7 @@ sealed interface MedicationDetailEvent {
 class MedicationDetailViewModel @Inject constructor(
     private val patientRepository: PatientRepository,
     private val medicationRepository: MedicationRepository,
+    private val timeSource: MedicalRecordTimeSource = SystemMedicalRecordTimeSource,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MedicationDetailUiState())
     val uiState: StateFlow<MedicationDetailUiState> = _uiState.asStateFlow()
@@ -207,17 +220,26 @@ class MedicationDetailViewModel @Inject constructor(
         this.medicationId = medicationId
         job?.cancel()
         job = viewModelScope.launch {
-            _uiState.value = MedicationDetailUiState(isLoading = true)
+            val today = timeSource.today()
+            _uiState.value = MedicationDetailUiState(isLoading = true, today = today)
             try {
                 val patient = patientRepository.ensureDefaultPatient()
                 patientId = patient.id
                 medicationRepository.observeMedication(patient.id, medicationId).collect { medication ->
-                    _uiState.value = MedicationDetailUiState(isLoading = false, medication = medication)
+                    _uiState.value = MedicationDetailUiState(
+                        isLoading = false,
+                        medication = medication,
+                        today = today,
+                    )
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                _uiState.value = MedicationDetailUiState(isLoading = false, hasError = true)
+                _uiState.value = MedicationDetailUiState(
+                    isLoading = false,
+                    hasError = true,
+                    today = today,
+                )
             }
         }
     }
@@ -277,7 +299,7 @@ data class MedicationEditorUiState(
     val name: String = "",
     val dose: String = "",
     val frequency: String = "",
-    val startDate: String = LocalDate.now().toString(),
+    val startDate: String = "",
     val endDate: String = "",
     val notes: String = "",
     val reminders: List<ReminderEditorItem> = emptyList(),
@@ -310,8 +332,9 @@ sealed interface MedicationEditorEvent {
 class MedicationEditorViewModel @Inject constructor(
     private val patientRepository: PatientRepository,
     private val medicationRepository: MedicationRepository,
+    private val timeSource: MedicalRecordTimeSource = SystemMedicalRecordTimeSource,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(MedicationEditorUiState())
+    private val _uiState = MutableStateFlow(newMedicationState())
     val uiState: StateFlow<MedicationEditorUiState> = _uiState.asStateFlow()
     private val _events = MutableSharedFlow<MedicationEditorEvent>(extraBufferCapacity = 1)
     val events: SharedFlow<MedicationEditorEvent> = _events.asSharedFlow()
@@ -323,7 +346,7 @@ class MedicationEditorViewModel @Inject constructor(
         requestedId = medicationId
         if (medicationId == null) {
             original = null
-            _uiState.value = MedicationEditorUiState()
+            _uiState.value = newMedicationState()
             return
         }
         viewModelScope.launch {
@@ -428,7 +451,7 @@ class MedicationEditorViewModel @Inject constructor(
             _uiState.update { it.copy(isSaving = true, hasSaveError = false) }
             try {
                 val patient = patientRepository.ensureDefaultPatient()
-                val now = Instant.now()
+                val now = timeSource.instant()
                 val existing = original
                 val medication = Medication(
                     id = existing?.id ?: UUID.randomUUID().toString(),
@@ -467,6 +490,10 @@ class MedicationEditorViewModel @Inject constructor(
             }
         }
     }
+
+    private fun newMedicationState(): MedicationEditorUiState = MedicationEditorUiState(
+        startDate = timeSource.today().toString(),
+    )
 }
 
 private fun MedicationWithReminders.toEditorState() = MedicationEditorUiState(
@@ -532,10 +559,15 @@ fun MedicationListScreen(
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(MedicalRecordTestTags.SCREEN_MEDICATIONS),
         topBar = { TopAppBar(title = { Text(stringResource(R.string.medications_title)) }) },
         floatingActionButton = {
-            FloatingActionButton(onClick = onCreate) {
+            FloatingActionButton(
+                onClick = onCreate,
+                modifier = Modifier.testTag(MedicalRecordTestTags.MEDICATION_NEW),
+            ) {
                 Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.new_medication))
             }
         },
@@ -559,7 +591,7 @@ fun MedicationListScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(uiState.medications, key = Medication::id) { medication ->
-                        MedicationListItem(medication, onOpen)
+                        MedicationListItem(medication, uiState.today, onOpen)
                     }
                     item { Spacer(Modifier.height(72.dp)) }
                 }
@@ -581,6 +613,7 @@ private fun MedicationFilterRow(selected: MedicationFilter, onSelected: (Medicat
             FilterChip(
                 selected = selected == filter,
                 onClick = { onSelected(filter) },
+                modifier = Modifier.testTag(filter.testTag()),
                 label = { Text(stringResource(filter.labelRes())) },
             )
         }
@@ -594,8 +627,19 @@ private fun MedicationFilter.labelRes(): Int = when (this) {
     MedicationFilter.ALL -> R.string.medication_filter_all
 }
 
+private fun MedicationFilter.testTag(): String = when (this) {
+    MedicationFilter.CURRENT -> MedicalRecordTestTags.MEDICATION_FILTER_CURRENT
+    MedicationFilter.UPCOMING -> MedicalRecordTestTags.MEDICATION_FILTER_UPCOMING
+    MedicationFilter.ENDED -> MedicalRecordTestTags.MEDICATION_FILTER_ENDED
+    MedicationFilter.ALL -> MedicalRecordTestTags.MEDICATION_FILTER_ALL
+}
+
 @Composable
-private fun MedicationListItem(medication: Medication, onOpen: (String) -> Unit) {
+private fun MedicationListItem(
+    medication: Medication,
+    today: LocalDate,
+    onOpen: (String) -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth().clickable { onOpen(medication.id) }) {
         ListItem(
             headlineContent = { Text(medication.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -607,7 +651,7 @@ private fun MedicationListItem(medication: Medication, onOpen: (String) -> Unit)
                 )
             },
             leadingContent = { Icon(Icons.Outlined.Medication, contentDescription = null) },
-            trailingContent = { CourseChip(medication.courseStatus(LocalDate.now())) },
+            trailingContent = { CourseChip(medication.courseStatus(today)) },
         )
     }
 }
@@ -660,7 +704,9 @@ fun MedicationDetailScreen(
 ) {
     val showBack = LocalDetailBackNavigationVisible.current
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(MedicalRecordTestTags.SCREEN_MEDICATION_DETAIL),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.medication_details_title)) },
@@ -673,10 +719,16 @@ fun MedicationDetailScreen(
                 },
                 actions = {
                     uiState.medication?.medication?.let { medication ->
-                        IconButton(onClick = { onEdit(medication.id) }) {
+                        IconButton(
+                            onClick = { onEdit(medication.id) },
+                            modifier = Modifier.testTag(MedicalRecordTestTags.MEDICATION_EDIT),
+                        ) {
                             Icon(Icons.Outlined.Edit, stringResource(R.string.edit))
                         }
-                        IconButton(onClick = { onAction(MedicationDetailAction.RequestDelete) }) {
+                        IconButton(
+                            onClick = { onAction(MedicationDetailAction.RequestDelete) },
+                            modifier = Modifier.testTag(MedicalRecordTestTags.MEDICATION_DELETE),
+                        ) {
                             Icon(Icons.Outlined.Delete, stringResource(R.string.delete))
                         }
                     }
@@ -695,7 +747,11 @@ fun MedicationDetailScreen(
                 bodyRes = R.string.error_body,
                 modifier = Modifier.padding(padding),
             )
-            else -> MedicationDetailsContent(uiState.medication, Modifier.padding(padding))
+            else -> MedicationDetailsContent(
+                result = uiState.medication,
+                today = uiState.today,
+                modifier = Modifier.padding(padding),
+            )
         }
     }
     if (uiState.showDeleteConfirmation) {
@@ -704,12 +760,18 @@ fun MedicationDetailScreen(
             title = { Text(stringResource(R.string.medication_delete_title)) },
             text = { Text(stringResource(R.string.medication_delete_body)) },
             confirmButton = {
-                Button(onClick = { onAction(MedicationDetailAction.ConfirmDelete) }) {
+                Button(
+                    onClick = { onAction(MedicationDetailAction.ConfirmDelete) },
+                    modifier = Modifier.testTag(MedicalRecordTestTags.MEDICATION_DELETE_CONFIRM),
+                ) {
                     Text(stringResource(R.string.delete))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { onAction(MedicationDetailAction.DismissDelete) }) {
+                TextButton(
+                    onClick = { onAction(MedicationDetailAction.DismissDelete) },
+                    modifier = Modifier.testTag(MedicalRecordTestTags.MEDICATION_DELETE_CANCEL),
+                ) {
                     Text(stringResource(R.string.cancel))
                 }
             },
@@ -718,15 +780,21 @@ fun MedicationDetailScreen(
 }
 
 @Composable
-private fun MedicationDetailsContent(result: MedicationWithReminders, modifier: Modifier = Modifier) {
+private fun MedicationDetailsContent(
+    result: MedicationWithReminders,
+    today: LocalDate,
+    modifier: Modifier = Modifier,
+) {
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(MedicalRecordTestTags.MEDICATION_DETAIL_CONTENT),
         contentPadding = ScreenContentPadding,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
             Text(result.medication.name, style = MaterialTheme.typography.headlineMedium)
-            CourseChip(result.medication.courseStatus(LocalDate.now()))
+            CourseChip(result.medication.courseStatus(today))
         }
         item {
             Card {
@@ -827,7 +895,9 @@ fun MedicationEditorScreen(
     }
 
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(MedicalRecordTestTags.SCREEN_MEDICATION_EDITOR),
         topBar = {
             TopAppBar(
                 title = {
@@ -852,7 +922,9 @@ fun MedicationEditorScreen(
                 maxWidth = MedicalRecordThemeTokens.formMaxWidth,
             ) {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag(MedicalRecordTestTags.MEDICATION_EDITOR_FORM),
                     contentPadding = ScreenContentPadding,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -865,14 +937,20 @@ fun MedicationEditorScreen(
                     item {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(stringResource(R.string.reminders_title), modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                            TextButton(onClick = { onAction(MedicationEditorAction.AddReminder) }) {
+                            TextButton(
+                                onClick = { onAction(MedicationEditorAction.AddReminder) },
+                                modifier = Modifier.testTag(MedicalRecordTestTags.REMINDER_ADD),
+                            ) {
                                 Icon(Icons.Outlined.Add, contentDescription = null)
                                 Text(stringResource(R.string.reminder_add))
                             }
                         }
                     }
-                    items(uiState.reminders, key = ReminderEditorItem::stableId) { reminder ->
-                        ReminderEditorRow(reminder, onAction)
+                    itemsIndexed(
+                        items = uiState.reminders,
+                        key = { _, reminder -> reminder.stableId },
+                    ) { index, reminder ->
+                        ReminderEditorRow(index, reminder, onAction)
                     }
                     if (uiState.hasEnabledReminder) {
                         item {
@@ -908,7 +986,9 @@ fun MedicationEditorScreen(
                             }
                             Button(
                                 onClick = { onAction(MedicationEditorAction.Save) },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag(MedicalRecordTestTags.MEDICATION_SAVE),
                                 enabled = !uiState.isSaving,
                             ) {
                                 Text(stringResource(if (uiState.isSaving) R.string.saving else R.string.save))
@@ -923,13 +1003,19 @@ fun MedicationEditorScreen(
 }
 
 @Composable
-private fun ReminderEditorRow(reminder: ReminderEditorItem, onAction: (MedicationEditorAction) -> Unit) {
+private fun ReminderEditorRow(
+    index: Int,
+    reminder: ReminderEditorItem,
+    onAction: (MedicationEditorAction) -> Unit,
+) {
     Card {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = reminder.time,
                 onValueChange = { onAction(MedicationEditorAction.ReminderTimeChanged(reminder.stableId, it)) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(MedicalRecordTestTags.reminderTime(index)),
                 label = { Text(stringResource(R.string.reminder_time)) },
                 isError = reminder.isInvalid,
                 supportingText = if (reminder.isInvalid) ({ Text(stringResource(R.string.validation_invalid_time)) }) else null,
@@ -940,8 +1026,12 @@ private fun ReminderEditorRow(reminder: ReminderEditorItem, onAction: (Medicatio
                 Switch(
                     checked = reminder.enabledByUser,
                     onCheckedChange = { onAction(MedicationEditorAction.ReminderEnabledChanged(reminder.stableId, it)) },
+                    modifier = Modifier.testTag(MedicalRecordTestTags.reminderEnabled(index)),
                 )
-                IconButton(onClick = { onAction(MedicationEditorAction.RemoveReminder(reminder.stableId)) }) {
+                IconButton(
+                    onClick = { onAction(MedicationEditorAction.RemoveReminder(reminder.stableId)) },
+                    modifier = Modifier.testTag(MedicalRecordTestTags.reminderRemove(index)),
+                ) {
                     Icon(Icons.Outlined.Delete, stringResource(R.string.reminder_remove))
                 }
             }
@@ -991,11 +1081,23 @@ private fun MedicationTextField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(medicationFieldTag(labelRes)),
         label = { Text(stringResource(labelRes)) },
         isError = isError,
         supportingText = if (isError) ({ Text(stringResource(errorRes)) }) else null,
         singleLine = singleLine,
         minLines = if (singleLine) 1 else 3,
     )
+}
+
+private fun medicationFieldTag(labelRes: Int): String = when (labelRes) {
+    R.string.medication_name -> MedicalRecordTestTags.MEDICATION_NAME
+    R.string.medication_dose -> MedicalRecordTestTags.MEDICATION_DOSE
+    R.string.medication_frequency -> MedicalRecordTestTags.MEDICATION_FREQUENCY
+    R.string.medication_start_date -> MedicalRecordTestTags.MEDICATION_START_DATE
+    R.string.medication_end_date -> MedicalRecordTestTags.MEDICATION_END_DATE
+    R.string.medication_notes -> MedicalRecordTestTags.MEDICATION_NOTES
+    else -> error("Medication field is missing a stable test tag: $labelRes")
 }

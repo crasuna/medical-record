@@ -148,8 +148,35 @@ AGP 9.3.1 + KGP 2.4.10 是可配置组合，但不宣称处于 JetBrains fully-s
 ## 测试与设备验收
 
 JVM 测试覆盖 Repository、关键 ViewModel、Room 约束、密钥 envelope、附件加密/篡改/清理、提醒、
-Navigation scene 和隐私行为。Android instrumentation 覆盖真实 Room + SQLCipher 建库/重开/错误
-密钥/WAL/事务与 Android Keystore 行为。
+Navigation scene 和隐私行为。设备端测试使用独立的 `e2e` build type：目标应用
+`com.loveluke.medicalrecord.e2e`，测试应用 `com.loveluke.medicalrecord.e2e.test`。设备准备只能卸载这两个
+隔离包，不得清理 release 或 debug 包；Orchestrator 在测试间清除 E2E 数据，因此自动化可以创建和删除
+自己的测试记录而不接触用户业务数据。
+
+### 自动化分组与判定
+
+`@CoreJourney` 是默认且唯一阻塞的设备门禁，必须精确发现并执行 12 条测试，单条硬超时 5 分钟。它
+覆盖 MainActivity 冷启动、Home / Encounters / Medications 往返、就诊与用药的创建/编辑/删除/筛选、
+首页搜索、真实加密附件、Room 复合外键、Android Keystore、key envelope、SQLCipher，以及 Locked
+页面两次确认。通过条件同时包括：
+
+- `connectedE2eAndroidTest` 在选定设备真实执行，`tests=12`、`failures=0`、`errors=0`、
+  `skipped=0`；instrumentation 编译成功不能替代设备执行。
+- `verifyAndArchiveCoreJourney` 成功解析 JUnit XML、核对精确计数和逐测试证据，并完成归档。
+- E2E APK 安装及 MainActivity 冷启动成功，核心页面行为的自动断言全部通过。
+- 每条测试的验收窗口内没有目标应用新增崩溃、`FATAL EXCEPTION` 或 ANR。
+
+`@SystemInteraction` 是按需系统交互分组，必须精确发现并执行 2 条测试，单条硬超时 15 分钟。它覆盖
+真实 Photo Picker 选择、加密导入与内容核验，以及 Receiver 发布私密通知、系统通知点击和用药详情
+跳转。只有用户明确要求系统交互验收，或当前任务明确把相应系统边界纳入验收范围时才执行；日常设备
+门禁默认不执行、不展开、不汇报。它通过时必须满足 `tests=2`、`failures=0`、`errors=0`、
+`skipped=0`，并由 `verifyAndArchiveSystemInteraction` 校验和归档。System 失败只否定本次被要求的系统
+交互项目，不回溯性否定此前已经通过的 Core 门禁。
+
+自动断言是唯一 verdict。终态截图、失败截图、UI hierarchy、exception 和 logcat 只用于留证和诊断，
+代理或人工观察不得把失败改判为通过。不得静默 skip，不自动重试单条测试；修改实现或测试后必须重新
+运行对应完整分组。详细命令、12 + 2 覆盖清单和产物布局见
+[`docs/testing/device-journeys.md`](docs/testing/device-journeys.md)。
 
 ### 当前设备门禁
 
@@ -158,18 +185,13 @@ Navigation scene 和隐私行为。Android instrumentation 覆盖真实 Room + S
 门禁；没有在线设备时写“设备测试未执行”，不能用 instrumentation 编译成功替代设备通过，也不能
 把未执行写成测试失败。
 
-当前设备门禁只有在以下条件全部满足时才通过：
+当前设备 Core 分组及其校验归档任务满足上述全部条件时，结论写“当前设备端验收已通过”。没有在线
+设备时写“设备测试未执行”，不能写成测试失败或通过；只有 instrumentation 编译结果时也写“设备测试
+未执行”。报告必须记录选定的 ADB serial、设备内 serial、AVD、API、ABI、page size、分辨率/密度、
+JUnit XML 路径和逐测试证据路径。该通过结论只覆盖选定设备，不代表其他 Android 配置已经验证。
 
-- `connectedDebugAndroidTest` 已在选定设备实际执行，所有发现的测试均通过，且 `failures=0`、
-  `errors=0`、`skipped=0`。
-- debug APK 安装成功，`MainActivity` 冷启动成功。
-- Home、Encounters、Medications 可以完成往返导航；页面标题、主要操作以及空状态或已有数据状态
-  正常，验收过程不创建或删除业务数据。
-- 验收窗口内没有新增应用崩溃、`FATAL EXCEPTION` 或 ANR。
-
-验收报告记录设备 serial 或 AVD、API、ABI、page size、分辨率/密度和 instrumentation 报告位置。
-满足上述条件时写“当前设备端验收已通过”；该结论只覆盖选定设备，不代表其他 Android 配置已经
-验证。
+代理手工烟雾检查默认不执行，也不是门禁组成部分。只有自动化失败需要定位、用户报告 UI/交互问题，
+或用户明确要求人工观察时才按需执行；人工检查不能替代 Core 自动化或改变其 verdict。
 
 ### 非阻塞兼容性清单
 
