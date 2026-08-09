@@ -60,12 +60,14 @@ jobs:
             --continue \
             --warning-mode=all \
             --stacktrace \
-            testDebugUnitTest \
-            compileDebugAndroidTestKotlin \
-            lintDebug \
-            assembleDebug \
-            assembleRelease \
-            bundleRelease
+            :app:testE2eUnitTest \
+            :app:compileE2eAndroidTestKotlin \
+            :app:lintDebug \
+            :app:lintE2e \
+            :app:assembleDebug \
+            :app:assembleE2e \
+            :app:assembleRelease \
+            :app:bundleRelease
 
       - name: Verify clean Git working tree
         if: ${{ always() && steps.checkout.outcome == 'success' }}
@@ -84,8 +86,9 @@ jobs:
         with:
           name: android-ci-reports-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            app/build/reports/tests/testDebugUnitTest/
-            app/build/test-results/testDebugUnitTest/
+            app/build/reports/tests/testE2eUnitTest/
+            app/build/test-results/testE2eUnitTest/
             app/build/reports/lint-results-debug.*
+            app/build/reports/lint-results-e2e.*
           if-no-files-found: ignore
           retention-days: 14
